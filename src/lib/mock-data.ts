@@ -585,15 +585,22 @@ export function getNnbByManagerStacked(
   return [...byMgr.values()].sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
 }
 
-const CATEGORY_COLORS: Record<Category, string> = {
-  "Equity DM": "#00B140",
-  "Equity EM": "#1F7A3A",
-  "Fixed Income IG": "#000000",
-  "High Yield": "#7A7A7A",
-  "Money Market": "#B8B8B8",
-};
+const CATEGORY_PALETTE = [
+  "#00B140",
+  "#1F7A3A",
+  "#000000",
+  "#4D4D4D",
+  "#7A7A7A",
+  "#999999",
+  "#B8B8B8",
+  "#D4D4D4",
+  "#005f24",
+  "#3a8a5a",
+];
 export function categoryColor(c: Category) {
-  return CATEGORY_COLORS[c];
+  if (c === "Money Market") return "#B8B8B8";
+  const idx = CATEGORIES.indexOf(c);
+  return CATEGORY_PALETTE[(idx >= 0 ? idx : 0) % CATEGORY_PALETTE.length];
 }
 
 /**
