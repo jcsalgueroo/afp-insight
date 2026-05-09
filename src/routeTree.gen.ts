@@ -9,9 +9,21 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SecuritiesRouteImport } from './routes/securities'
+import { Route as FlowsRouteImport } from './routes/flows'
 import { Route as AfpRouteImport } from './routes/afp'
 import { Route as IndexRouteImport } from './routes/index'
 
+const SecuritiesRoute = SecuritiesRouteImport.update({
+  id: '/securities',
+  path: '/securities',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FlowsRoute = FlowsRouteImport.update({
+  id: '/flows',
+  path: '/flows',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AfpRoute = AfpRouteImport.update({
   id: '/afp',
   path: '/afp',
@@ -26,31 +38,53 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/afp': typeof AfpRoute
+  '/flows': typeof FlowsRoute
+  '/securities': typeof SecuritiesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/afp': typeof AfpRoute
+  '/flows': typeof FlowsRoute
+  '/securities': typeof SecuritiesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/afp': typeof AfpRoute
+  '/flows': typeof FlowsRoute
+  '/securities': typeof SecuritiesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/afp'
+  fullPaths: '/' | '/afp' | '/flows' | '/securities'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/afp'
-  id: '__root__' | '/' | '/afp'
+  to: '/' | '/afp' | '/flows' | '/securities'
+  id: '__root__' | '/' | '/afp' | '/flows' | '/securities'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AfpRoute: typeof AfpRoute
+  FlowsRoute: typeof FlowsRoute
+  SecuritiesRoute: typeof SecuritiesRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/securities': {
+      id: '/securities'
+      path: '/securities'
+      fullPath: '/securities'
+      preLoaderRoute: typeof SecuritiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/flows': {
+      id: '/flows'
+      path: '/flows'
+      fullPath: '/flows'
+      preLoaderRoute: typeof FlowsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/afp': {
       id: '/afp'
       path: '/afp'
@@ -71,6 +105,8 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AfpRoute: AfpRoute,
+  FlowsRoute: FlowsRoute,
+  SecuritiesRoute: SecuritiesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
