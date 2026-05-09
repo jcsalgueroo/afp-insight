@@ -690,6 +690,28 @@ export function tickerOf(isin: string) {
   return isin.slice(-4).toUpperCase();
 }
 
+// ---------- Category composition (% of bucket AUM Org over time) ----------
+
+export function getCategoryCompositionSeries(afps: AFP[], bucket: Bucket) {
+  const cats = CATEGORIES.filter((c) =>
+    bucket === "Money Market" ? c === "Money Market" : c !== "Money Market",
+  );
+  return MONTHS.map((m) => {
+    const rows = rowsAt(m, afps).filter((r) => bucketOf(r) === bucket);
+    const raw: Record<string, number> = {};
+    let total = 0;
+    for (const c of cats) raw[c] = 0;
+    for (const r of rows) {
+      raw[r.Category] = (raw[r.Category] ?? 0) + r.AUM_USD;
+      total += r.AUM_USD;
+    }
+    const out: Record<string, number | string | Record<string, number>> = { m, total };
+    for (const c of cats) out[c] = total ? raw[c] / total : 0;
+    out.__raw = raw;
+    return out as { m: string; total: number; __raw: Record<string, number> } & Record<string, number>;
+  });
+}
+
 /** Per-position rows for the AFP positions table. */
 export function getAfpPositions(
   afps: AFP[],
