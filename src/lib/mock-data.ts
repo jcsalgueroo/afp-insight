@@ -348,3 +348,179 @@ export function managerColor(m: Manager) {
   const idx = MANAGERS.filter((x) => x !== "BlackRock").indexOf(m);
   return CHART_COLORS.grayPalette[idx + 1] ?? CHART_COLORS.competitor;
 }
+
+// ---------- Brand & bucket helpers ----------
+
+export type Bucket = "ETF" | "Mutual Fund" | "Money Market";
+export const BUCKETS: Bucket[] = ["ETF", "Mutual Fund", "Money Market"];
+
+export function brandOf(r: MasterRow): string {
+  if (r.Manager === "BlackRock") return r.Asset_Type === "ETF" ? "iShares" : "BlackRock";
+  return r.Manager;
+}
+
+export function bucketOf(r: MasterRow): Bucket {
+  if (r.Category === "Money Market") return "Money Market";
+  if (r.Asset_Type === "ETF") return "ETF";
+  return "Mutual Fund";
+}
+
+export function brandColor(b: string) {
+  if (b === "iShares") return CHART_COLORS.blk;
+  if (b === "BlackRock") return CHART_COLORS.blkAlt;
+  if (b === "Others") return "#CCCCCC";
+  // grey palette for rest
+  const others = MANAGERS.filter((x) => x !== "BlackRock");
+  const idx = others.indexOf(b as Manager);
+  return CHART_COLORS.grayPalette[(idx >= 0 ? idx : 0) + 1] ?? CHART_COLORS.competitor;
+}
+
+export const BUCKET_COLOR: Record<Bucket, string> = {
+  ETF: CHART_COLORS.blk,
+  "Mutual Fund": CHART_COLORS.blkAlt,
+  "Money Market": "#B8B8B8",
+};
+
+function monthsYTD(date: string): string[] {
+  const year = date.slice(0, 4);
+  return MONTHS.filter((m) => m.startsWith(year) && m <= date);
+}
+
+function rowsAt(month: string, afps: AFP[]) {
+  return MASTER_DATA.filter(
+    (r) => r.Date === month && (afps.length === 0 || afps.includes(r.AFP)),
+  );
+}
+
+// ---------- Brand KPI cards (iShares ETF share, BLK MF share) ----------
+
+function shareAtMonth(
+  month: string,
+  afps: AFP[],
+  predicate: (r: MasterRow) => boolean,
+  poolBucket: Bucket,
+) {
+  const rows = rowsAt(month, afps).filter((r) => bucketOf(r) === poolBucket);
+  const total = sumBy(rows, (r) => r.AUM_USD);
+  const num = sumBy(rows.filter(predicate), (r) => r.AUM_USD);
+  return total ? num / total : 0;
+}
+
+export function getBrandKpis(f: Filters) {
+  const idx = MONTHS.indexOf(f.date);
+  const trend = (pred: (r: MasterRow) => boolean, bucket: Bucket) => {
+    const start = Math.max(0, idx - 3);
+    return MONTHS.slice(start, idx + 1).map((m) => ({
+      m,
+      v: shareAtMonth(m, f.afps, pred, bucket),
+    }));
+  };
+  const ishPred = (r: MasterRow) => brandOf(r) === "iShares";
+  const blkMfPred = (r: MasterRow) => brandOf(r) === "BlackRock" && bucketOf(r) === "Mutual Fund";
+
+  const ishCur = shareAtMonth(f.date, f.afps, ishPred, "ETF");
+  const ishPrev = shareAtMonth(MONTHS[Math.max(0, idx - 1)], f.afps, ishPred, "ETF");
+  const blkCur = shareAtMonth(f.date, f.afps, blkMfPred, "Mutual Fund");
+  const blkPrev = shareAtMonth(MONTHS[Math.max(0, idx - 1)], f.afps, blkMfPred, "Mutual Fund");
+
+  return {
+    iSharesEtf: ishCur,
+    iSharesEtfDelta: ishPrev ? (ishCur - ishPrev) / ishPrev : 0,
+    iSharesEtfTrend: trend(ishPred, "ETF"),
+    blkMf: blkCur,
+    blkMfDelta: blkPrev ? (blkCur - blkPrev) / blkPrev : 0,
+    blkMfTrend: trend(blkMfPred, "Mutual Fund"),
+  };
+}
+
+// ---------- AUM Org by bucket (12-month series) ----------
+
+export function getAumOrgByBucketSeries(afps: AFP[], metric: "AUM_USD" | "NNB_USD") {
+  return MONTHS.map((m) => {
+    const rows = rowsAt(m, afps);
+    const out: Record<string, number | string> = { m };
+    for (const b of BUCKETS) out[b] = 0;
+    for (const r of rows) {
+      const b = bucketOf(r);
+      out[b] = (out[b] as number) + r[metric];
+    }
+    return out;
+  });
+}
+
+// ---------- Top 5 Managers pie by bucket ----------
+
+export function getTopManagersPie(f: Filters, bucket: Bucket) {
+  const rows = rowsAt(f.date, f.afps).filter((r) => bucketOf(r) === bucket);
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const b = brandOf(r);
+    map.set(b, (map.get(b) ?? 0) + r.AUM_USD);
+  }
+  const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, 5);
+  const rest = sorted.slice(5).reduce((a, [, v]) => a + v, 0);
+  const result = top.map(([name, value]) => ({ name, value }));
+  if (rest > 0) result.push({ name: "Others", value: rest });
+  return result;
+}
+
+// ---------- YTD by Manager (cumulative area series) ----------
+
+export function getYtdByManagerSeries(
+  f: Filters,
+  bucket: Bucket,
+  metric: "NNB" | "NNBF",
+) {
+  const months = monthsYTD(f.date);
+  // Determine top brands across the whole YTD window
+  const totals = new Map<string, number>();
+  for (const m of months) {
+    for (const r of rowsAt(m, f.afps).filter((r) => bucketOf(r) === bucket)) {
+      const v = metric === "NNB" ? r.NNB_USD : (r.NNB_USD * r.Fee_bps) / 10000;
+      const b = brandOf(r);
+      totals.set(b, (totals.get(b) ?? 0) + v);
+    }
+  }
+  const brands = [...totals.entries()].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 6).map(([k]) => k);
+  const cum: Record<string, number> = Object.fromEntries(brands.map((b) => [b, 0]));
+  const data = months.map((m) => {
+    const row: Record<string, number | string> = { m };
+    const monthly: Record<string, number> = Object.fromEntries(brands.map((b) => [b, 0]));
+    for (const r of rowsAt(m, f.afps).filter((r) => bucketOf(r) === bucket)) {
+      const b = brandOf(r);
+      if (!brands.includes(b)) continue;
+      const v = metric === "NNB" ? r.NNB_USD : (r.NNB_USD * r.Fee_bps) / 10000;
+      monthly[b] += v;
+    }
+    for (const b of brands) {
+      cum[b] += monthly[b];
+      row[b] = cum[b];
+    }
+    return row;
+  });
+  return { data, brands };
+}
+
+// ---------- Category weight bubble data ----------
+
+export function getCategoryWeightBubbles(f: Filters, afp: AFP) {
+  const allRows = rowsAt(f.date, []);
+  const afpRows = rowsAt(f.date, [afp]);
+  const totalAll = sumBy(allRows, (r) => r.AUM_USD) || 1;
+  const totalAfp = sumBy(afpRows, (r) => r.AUM_USD) || 1;
+
+  return CATEGORIES.map((cat, idx) => {
+    const allCat = allRows.filter((r) => r.Category === cat);
+    const afpCat = afpRows.filter((r) => r.Category === cat);
+    const aggWeight = (sumBy(allCat, (r) => r.AUM_USD) / totalAll) * 100;
+    const afpWeight = (sumBy(afpCat, (r) => r.AUM_USD) / totalAfp) * 100;
+    const blkInCat = sumBy(
+      allCat.filter((r) => r.Manager === "BlackRock"),
+      (r) => r.AUM_USD,
+    );
+    const totalInCat = sumBy(allCat, (r) => r.AUM_USD) || 1;
+    const sizeShare = (blkInCat / totalInCat) * 100; // 0..100
+    return { category: cat, idx, aggWeight, afpWeight, sizeShare };
+  });
+}
