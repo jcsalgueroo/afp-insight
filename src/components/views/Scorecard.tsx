@@ -118,7 +118,8 @@ function AfpSinglePicker({ value, onChange }: { value: AFP; onChange: (a: AFP) =
 const tooltipStyle = { fontSize: 12, border: "1px solid #E5E5E5", borderRadius: 4 } as const;
 
 export function Scorecard() {
-  const { date, afps, blkOnly } = useDashboard();
+  const { date, blkOnly } = useDashboard();
+  const afps: AFP[] = [];
   const filters = { date, afps, blkOnly };
   const k = getKPIs(filters);
   const bk = getBrandKpis({ ...filters, blkOnly: false });
