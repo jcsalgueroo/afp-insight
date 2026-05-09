@@ -11,6 +11,7 @@ import {
 import appCss from "../styles.css?url";
 import { TopNav } from "@/components/shell/TopNav";
 import { Sidebar } from "@/components/shell/Sidebar";
+import { DataGate } from "@/components/shell/DataGate";
 
 function NotFoundComponent() {
   return (
@@ -120,7 +121,9 @@ function RootComponent() {
         <div className="flex flex-1">
           <Sidebar />
           <main className="flex-1 min-w-0">
-            <Outlet />
+            <DataGate>
+              <Outlet />
+            </DataGate>
           </main>
         </div>
       </div>
