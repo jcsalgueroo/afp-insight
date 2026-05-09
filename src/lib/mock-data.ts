@@ -1092,3 +1092,131 @@ export function getCategoryFeeBubbles(afp: AFP, bucket: Bucket | "All", date: st
     return { Category: cat as string, sysFee, afpFee, sharePct, blkSharePct };
   });
 }
+// ---------- Product Penetration ----------
+
+export function getPenetrationHeatmap(opts: {
+  bucket: Bucket | "All";
+  portfolioTypes: PortfolioType[];
+  date: string;
+}) {
+  const { bucket, portfolioTypes, date } = opts;
+  const ptSet = portfolioTypes.length ? new Set(portfolioTypes) : null;
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      r.Date === date &&
+      (bucket === "All" || bucketOf(r) === bucket) &&
+      (!ptSet || ptSet.has(r.Portfolio_Type)),
+  );
+
+  // Sort categories by total AUM desc
+  const catTotals = new Map<Category, number>();
+  for (const r of rows)
+    catTotals.set(r.Category, (catTotals.get(r.Category) ?? 0) + r.AUM_USD);
+  const categories = [...CATEGORIES]
+    .filter((c) => (catTotals.get(c) ?? 0) > 0)
+    .sort((a, b) => (catTotals.get(b) ?? 0) - (catTotals.get(a) ?? 0));
+  const afps = [...AFPS];
+
+  const cells = categories.map((cat) =>
+    afps.map((afp) => {
+      const slice = rows.filter((r) => r.Category === cat && r.AFP === afp);
+      const total = sumBy(slice, (r) => r.AUM_USD);
+      const blk = sumBy(
+        slice.filter((r) => r.Manager === "BlackRock"),
+        (r) => r.AUM_USD,
+      );
+      const blkShare = total ? blk / total : 0;
+      const byMgr = new Map<Manager, number>();
+      for (const r of slice)
+        byMgr.set(r.Manager, (byMgr.get(r.Manager) ?? 0) + r.AUM_USD);
+      const topManagers = [...byMgr.entries()]
+        .map(([Manager, AUM]) => ({ Manager, sharePct: total ? (AUM / total) * 100 : 0 }))
+        .sort((a, b) => b.sharePct - a.sharePct)
+        .slice(0, 3);
+      return { blkShare, totalAUM: total, topManagers };
+    }),
+  );
+
+  return { categories, afps, cells };
+}
+
+export interface BelowWeightRow {
+  Category: Category;
+  AFP: AFP;
+  blkShare: number;
+  cellAUM: number;
+  ISIN: string;
+  Ticker: string;
+  Name: string;
+  Manager: Manager;
+  Asset_Type: string;
+  AUM_USD: number;
+  YTD_Perf: number;
+  NNB_USD: number;
+}
+
+export function getBelowWeightSecurities(opts: {
+  bucket: Bucket | "All";
+  portfolioTypes: PortfolioType[];
+  date: string;
+  threshold?: number;
+}): BelowWeightRow[] {
+  const { bucket, portfolioTypes, date, threshold = 0.65 } = opts;
+  const { categories, afps, cells } = getPenetrationHeatmap({ bucket, portfolioTypes, date });
+  const ptSet = portfolioTypes.length ? new Set(portfolioTypes) : null;
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      r.Date === date &&
+      (bucket === "All" || bucketOf(r) === bucket) &&
+      (!ptSet || ptSet.has(r.Portfolio_Type)),
+  );
+
+  // YTD NNB by ISIN+AFP
+  const ytdMonths = monthsYTD(date);
+  const ytdRows = MASTER_DATA.filter(
+    (r) =>
+      ytdMonths.includes(r.Date) &&
+      (bucket === "All" || bucketOf(r) === bucket) &&
+      (!ptSet || ptSet.has(r.Portfolio_Type)),
+  );
+  const ytdKey = (afp: AFP, isin: string) => `${afp}|${isin}`;
+  const ytdNnb = new Map<string, number>();
+  for (const r of ytdRows)
+    ytdNnb.set(
+      ytdKey(r.AFP, r.ISIN),
+      (ytdNnb.get(ytdKey(r.AFP, r.ISIN)) ?? 0) + r.NNB_USD,
+    );
+
+  const out: BelowWeightRow[] = [];
+  categories.forEach((cat, ci) => {
+    afps.forEach((afp, ai) => {
+      const cell = cells[ci][ai];
+      if (cell.totalAUM <= 0 || cell.blkShare >= threshold) return;
+      // collapse to one row per ISIN within (cat, afp)
+      const inCell = rows.filter((r) => r.Category === cat && r.AFP === afp);
+      const byIsin = new Map<string, MasterRow & { _aum: number }>();
+      for (const r of inCell) {
+        const cur = byIsin.get(r.ISIN);
+        if (cur) cur._aum += r.AUM_USD;
+        else byIsin.set(r.ISIN, { ...r, _aum: r.AUM_USD });
+      }
+      for (const r of byIsin.values()) {
+        out.push({
+          Category: cat,
+          AFP: afp,
+          blkShare: cell.blkShare,
+          cellAUM: cell.totalAUM,
+          ISIN: r.ISIN,
+          Ticker: tickerOf(r.ISIN),
+          Name: r.Name,
+          Manager: r.Manager,
+          Asset_Type: r.Asset_Type,
+          AUM_USD: r._aum,
+          YTD_Perf: r.YTD_Perf,
+          NNB_USD: ytdNnb.get(ytdKey(afp, r.ISIN)) ?? 0,
+        });
+      }
+    });
+  });
+  return out;
+}
