@@ -370,8 +370,8 @@ export function brandColor(b: string) {
   if (b === "BlackRock") return CHART_COLORS.blkAlt;
   if (b === "Others") return "#CCCCCC";
   // grey palette for rest
-  const others = MANAGERS.filter((x) => x !== "BlackRock");
-  const idx = others.indexOf(b as Manager);
+  const others = MANAGERS.filter((x) => x !== "BlackRock") as string[];
+  const idx = others.indexOf(b);
   return CHART_COLORS.grayPalette[(idx >= 0 ? idx : 0) + 1] ?? CHART_COLORS.competitor;
 }
 
