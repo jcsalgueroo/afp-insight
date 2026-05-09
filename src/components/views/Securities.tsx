@@ -104,7 +104,7 @@ export function Securities() {
           <h1 className="text-xl font-semibold tracking-tight">Security-Level Detail</h1>
           <p className="text-sm text-muted-foreground">Full holdings ledger for the selected period.</p>
         </div>
-        <div className="relative w-72">
+        <div className="relative w-full sm:w-72">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             value={globalFilter}
