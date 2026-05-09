@@ -1,46 +1,89 @@
-## Product Penetration — new screen
+## Replace mock data with live Google Sheets CSVs
 
-Add a fifth dashboard screen showing BlackRock/iShares' market share across each (Category × AFP) cell, plus a follow-up table of weak cells.
+Wire the dashboard to two live Google Sheets CSV endpoints (MasterData + DisplacementMapping), parse with PapaParse, store in a Zustand global store, and feed every existing chart/table through hooks. UI/visuals stay identical except for two new toggles (Money Market bucket option, Month/YTD performance toggle).
 
-### Sidebar & route
-- `src/components/shell/Sidebar.tsx` — add entry "Product Penetration" (icon: `Crosshair` or `Target`), route `/penetration`.
-- `src/routes/penetration.tsx` — new route file.
-- `src/components/views/ProductPenetration.tsx` — new view.
+### 1. Dependencies
+- `bun add papaparse` and `bun add -d @types/papaparse`.
 
-### Section 1 — BlackRock Share Heatmap
-- **Rows**: Categories, sorted desc by aggregated AUM Org across all selected AFPs/Portfolio Types/bucket.
-- **Columns**: AFPs (all six, fixed left→right).
-- **Cell value**: `BLK_AUM / Total_AUM` for that (Category, AFP) slice → 0–100%.
-- **Color**: white (0%) → green (100%) linear ramp using design tokens (reuse `categoryColor`/primary green).
-- **Toolbar**:
-  - ETF / Mutual Fund / All segmented toggle (`SegmentedToggle`).
-  - Portfolio Type multi-select (`MultiSelectPopover`, options A–E, default = all).
-- **Hover card** (per cell): top-3 managers in that (Category, AFP) cell with name + % share, plus header showing Category, AFP, BLK share %.
+### 2. New files
 
-### Section 2 — Punching Below our Weight
-- Identifies all (Category, AFP) cells where BLK share < 65% (after applying the heatmap's bucket + portfolio filters).
-- Header includes a **Group By** segmented toggle: `Category → AFP` (default) | `AFP → Category`.
-- Renders as a grouped table (`Table` primitive) with sticky group headers:
-  - Outer group header: Category (or AFP) — shows aggregate AUM Org & avg BLK share %.
-  - Inner group header: AFP (or Category) — shows that cell's BLK share % and AUM.
-  - Rows = every security held in that cell (BlackRock + competitors).
-- **Columns**: Ticker / Name · Manager · AUM Org (USD) · YTD Perf (USD %) · YTD NNB (USD).
-  - "Ticker / Name": ETFs show ticker (derive from ISIN tail), Mutual Funds show full name — reuse the convention from the Securities screen.
-  - Base-currency YTD column omitted for now (per user) — note in column header tooltip.
+**`src/lib/data-sources.ts`** — CSV URL constants + `fetchCsv<T>(url, { numericFields })` helper using `Papa.parse` with `header: true, skipEmptyLines: true`. Numeric coercion is explicit (per field list) rather than `dynamicTyping`, so blanks become `0`/`null` predictably.
 
-### Data layer (`src/lib/mock-data.ts`)
-Add pure selectors derived from `MASTER_DATA`:
-- `getPenetrationHeatmap({ bucket, portfolioTypes })` → `{ categories: Category[]; afps: AFP[]; cells: { blkShare:number; totalAUM:number; topManagers:[{Manager, sharePct}] }[][] }`. Categories pre-sorted by total AUM desc.
-- `getBelowWeightSecurities({ bucket, portfolioTypes, threshold:0.65 })` → flat list `[{ Category, AFP, blkShare, ISIN, Ticker, Name, Manager, Asset_Type, AUM_USD, YTD_Perf, NNB_USD }]` ready for either grouping.
+**`src/lib/normalize.ts`** — Pure mappers from raw CSV row → existing typed rows.
 
-Bucket filter helpers (`bucketOf`) already exist; reuse.
+`MasterRow` mapping (per confirmed walkthrough):
+| UI field | Live column | Transform |
+|---|---|---|
+| `Date` | `fecha_corte` | normalize to `YYYY-MM` |
+| `AFP` | `standardized_afp` | string |
+| `Portfolio_Type` | `standardized_portfolio` | string |
+| `Category` | `category` | string |
+| `Asset_Type` | `type` | `'ETF' \| 'Mutual Fund' \| 'Money Market'` |
+| `Manager` | `manager` | merge `iShares` → `BlackRock` |
+| `Ticker` | `ticker` | string (ETFs only — populated for ETFs, blank otherwise) |
+| `Name` | `name` | string (security name for **all** asset types) |
+| `ISIN` | — | **ignored** (not used by UI) |
+| `AUM_USD` | `aum_org` | number |
+| `RRR_USD` | `rrr_org` | number |
+| `NNB_Month_USD` | `month_nnb` | number |
+| `NNB_YTD_USD` | `ytd_nnb` | number |
+| `NNBF_Month_USD` | `month_nnbf` | number (annualized fee impact, month) |
+| `NNBF_YTD_USD` | `ytd_nnbf` | number (annualized fee impact, YTD) |
+| `Perf_Month` | `month_performance_usd` | × 100 |
+| `Perf_YTD` | `ytd_performance_usd` (fallback `month_performance_usd` if absent) | × 100 |
+| `Fee_bps` | `fee` (decimal) | × 10000 |
 
-### Widgets
-- Reuse `SegmentedToggle`, `MultiSelectPopover`, `Card`, `Table`.
-- New small `Heatmap` rendered as CSS grid (no recharts heatmap primitive); hover card via `Popover` or a lightweight absolute-positioned div on `onMouseEnter`.
+**Ticker vs Name display rule** (consistent across Securities table, Punching-Below table, scatter tooltips, etc.):
+- `Asset_Type === 'ETF'` → primary label = `Ticker`, secondary line = `Name`.
+- `Asset_Type === 'Mutual Fund' | 'Money Market'` → primary label = `Name`, no ticker line.
+- Securities table: replace the current `ISIN` column with a `Ticker` column; keep `Name` column. ISIN-based row keys swap to a synthesized key (`AFP|Portfolio|Date|Ticker||Name`).
 
-### Out of scope
-- No backend / schema changes.
-- No edits to other screens.
-- No new design tokens — green ramp uses existing primary; whites/borders use existing tokens.
-- Base-currency performance column deferred until real FX data exists.
+`DisplacementRow` mapping: keep current shape; `AFP` from `held_by_afps` (comma-split → one row per AFP), `Fee_Advantage_bps`, `Perf_Advantage_pct` ×100, `BLK_*` from `blk_alternative_*` columns (including `blk_alternative_ticker` / `blk_alternative_name` displayed by the same Ticker-vs-Name rule).
+
+Ignored MasterData columns (per user): `aun`, `rrr`, `patrimonio`, `precio`, `total_unidades`, `fx_rate`, `moneda`, raw `afp`, raw `portfolio`/`portfolio_type`, base-currency perf, `isin`/`identifier`.
+
+**`src/lib/data-store.ts`** — Zustand store:
+```
+{ master, displacement,
+  afps, portfolioTypes, categories, managers, months, // derived
+  status: 'idle'|'loading'|'ready'|'error',
+  error: string | null,
+  load() }
+```
+On `load()`, fetch both URLs in parallel, normalize, derive distinct filter lists, set `status`. Hooks: `useMasterData()`, `useDisplacementData()`, `useFilterOptions()`, `useDataStatus()`.
+
+**`src/components/shell/DataGate.tsx`** — Wraps `<Outlet />` in `__root.tsx`. Calls `load()` on mount; renders skeleton during loading, error card with retry on failure, children when ready.
+
+### 3. Edits to `src/lib/mock-data.ts`
+- Loosen `AFP`, `PortfolioType`, `Category`, `Manager` to `string` aliases (preserve type names so imports keep compiling).
+- Extend `MasterRow` with the new NNB / NNBF / perf fields and make `Ticker` optional (ETF-only).
+- Remove `generateMaster()` / `generateDisplacement()` module-load calls and the exported `MASTER_DATA` / `DISPLACEMENT_DATA` constants. Replace `MONTHS`, `AFPS`, `PORTFOLIO_TYPES`, `CATEGORIES`, `MANAGERS` exports with re-exports from the store (or remove and update consumers to use `useFilterOptions()`).
+- Convert every selector (`getManagerAumFee`, `getCategoryFlows`, `getPenetrationHeatmap`, `getBelowWeightSecurities`, etc.) to take `(master: MasterRow[], …filters)` as first arg. Each view will pass `useMasterData()` in.
+
+### 4. New UI toggles
+- **Bucket toggle**: `All / ETF / MF / MM` everywhere it currently shows `All / ETF / MF`. Add `'Money Market'` to `Bucket` union; extend `bucketOf()`.
+- **NNB scope toggle** (Month / YTD) on Flows, Securities scatter, Revenue scatter — drives whether selectors read `NNB_Month_USD` or `NNB_YTD_USD`.
+- **Perf scope toggle** (Month / YTD) on Performance scatter and tables that show `YTD Perf` — drives `Perf_Month` vs `Perf_YTD`. Column header label updates accordingly.
+- Punching-Below table: keep current "YTD NNB" column but source from `NNB_YTD_USD`; add adjacent "YTD NNBF" column showing annualized revenue impact.
+
+### 5. Component updates
+Every view importing `MASTER_DATA` / constants from `mock-data.ts` switches to `useMasterData()` + `useFilterOptions()`:
+- `Scorecard`, `Flows`, `Securities`, `RevenueFeeAnalytics`, `AFPDeepDive`, `ProductPenetration`.
+- Securities table: drop `ISIN` column, add `Ticker` column (left of `Name`); MFs/MMs show blank ticker.
+- Filter popovers (`AfpFilterPopover`, etc.) read options from `useFilterOptions()`.
+- `dashboard-store.ts` `date` initializer becomes `null`; populated to latest month via store subscription once `status === 'ready'`.
+
+### 6. Loading & error UX
+- Skeleton: top KPI cards greyed out; full-page spinner with text "Loading live AFP data…".
+- Error: red card with message + Retry button calling `load()` again.
+
+### 7. Out of scope
+- No backend, no caching layer, no auth.
+- No chart redesigns, no new screens, no routing changes.
+- CSVs fetched directly from `docs.google.com` (CORS-safe). PapaParse runs in the browser.
+- Base-currency performance, FX, patrimonio, precio, ISIN remain ignored.
+
+### Open assumptions (call out if wrong)
+- Live CSVs include the columns named above with those exact headers (especially `category`, `ticker`, `name`, `ytd_performance_usd`, `month_nnbf`, `ytd_nnbf`, `fee`).
+- `fecha_corte` parses to a YYYY-MM month bucket (one row per security per month).
+- DisplacementMapping schema unchanged from previous round.
