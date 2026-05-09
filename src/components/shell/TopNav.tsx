@@ -6,6 +6,7 @@ import { MONTHS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
 function formatMonth(m: string) {
+  if (!m) return "—";
   const [y, mo] = m.split("-");
   const d = new Date(Number(y), Number(mo) - 1, 1);
   return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
