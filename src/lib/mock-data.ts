@@ -270,8 +270,9 @@ export function brandOf(r: MasterRow): string {
 }
 
 export function bucketOf(r: MasterRow): Bucket {
-  if (r.Category === "Money Market") return "Money Market";
-  if (r.Asset_Type === "ETF") return "ETF";
+  const t = (r.Asset_Type ?? "").trim();
+  if (t === "Money Market" || r.Category === "Money Market") return "Money Market";
+  if (t === "ETF") return "ETF";
   return "Mutual Fund";
 }
 
@@ -595,9 +596,13 @@ export function categoryColor(c: Category) {
   return CATEGORY_COLORS[c];
 }
 
-/** Derive a fake ticker from an ISIN (last 4 alphanumerics). */
+/**
+ * Find the canonical ticker for a security ISIN. Returns the live `Ticker`
+ * field if present (ETFs), or empty string for MFs / MMs.
+ */
 export function tickerOf(isin: string) {
-  return isin.slice(-4).toUpperCase();
+  const row = MASTER_DATA.find((r) => r.ISIN === isin);
+  return row?.Ticker ?? "";
 }
 
 // ---------- Category composition (% of bucket AUM Org over time) ----------
