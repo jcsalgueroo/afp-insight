@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -14,23 +14,80 @@ import {
   ComposedChart,
   Line,
   Legend,
+  AreaChart,
+  Area,
+  ReferenceLine,
+  LabelList,
 } from "recharts";
 import {
+  AFPS,
+  brandColor,
   CHART_COLORS,
   formatBps,
   formatUSD,
   getAUMvsFee,
+  getCategoryFlowBubbles,
   getNNBByManager,
   getScatter,
+  getYtdByManagerSeries,
   managerColor,
   MANAGERS,
+  type AFP,
+  type Bucket,
   type Manager,
 } from "@/lib/mock-data";
 import { useDashboard } from "@/lib/dashboard-store";
+import { AfpFilterPopover } from "@/components/widgets/AfpFilterPopover";
+import { SegmentedToggle } from "@/components/widgets/SegmentedToggle";
+import { cn } from "@/lib/utils";
+
+const BUCKET_TOGGLE = [
+  { value: "ETF" as Bucket, label: "ETF" },
+  { value: "Mutual Fund" as Bucket, label: "MF" },
+] as const;
+
+const PERIOD_TOGGLE = [
+  { value: "Month" as const, label: "Month" },
+  { value: "YTD" as const, label: "YTD" },
+] as const;
+
+const tooltipStyle = { fontSize: 12, border: "1px solid #E5E5E5", borderRadius: 4 } as const;
+
+function shortMonth(m: string) {
+  const [y, mo] = m.split("-");
+  return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString("en-US", { month: "short" });
+}
+
+function CardShell({
+  title,
+  subtitle,
+  right,
+  children,
+  className,
+}: {
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("bg-card border border-border rounded-md shadow-sm flex flex-col", className)}>
+      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border flex-wrap">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide">{title}</h2>
+          {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">{right}</div>
+      </div>
+      <div className="p-5 flex-1">{children}</div>
+    </div>
+  );
+}
 
 export function Flows() {
   const { date, blkOnly } = useDashboard();
-  const afps: never[] = [];
+  const afps: AFP[] = [];
   const filters = { date, afps, blkOnly };
 
   // Waterfall: stacked transparent base + delta
@@ -54,10 +111,43 @@ export function Flows() {
     data: scatter.filter((s) => s.Manager === m),
   })).filter((s) => s.data.length > 0);
 
+  // Moved-from-Scorecard state
+  const [nnbBucket, setNnbBucket] = useState<Bucket>("ETF");
+  const [nnbAfps, setNnbAfps] = useState<AFP[]>([]);
+  const [nnbfBucket, setNnbfBucket] = useState<Bucket>("ETF");
+  const [nnbfAfps, setNnbfAfps] = useState<AFP[]>([]);
+  const [flowPeriod, setFlowPeriod] = useState<"Month" | "YTD">("Month");
+  const [flowAfps, setFlowAfps] = useState<AFP[]>([]);
+
+  const nnbSeries = useMemo(
+    () => getYtdByManagerSeries({ date, afps: nnbAfps, blkOnly: false }, nnbBucket, "NNB"),
+    [date, nnbAfps, nnbBucket],
+  );
+  const nnbfSeries = useMemo(
+    () => getYtdByManagerSeries({ date, afps: nnbfAfps, blkOnly: false }, nnbfBucket, "NNBF"),
+    [date, nnbfAfps, nnbfBucket],
+  );
+  const flowBubbles = useMemo(
+    () => getCategoryFlowBubbles({ date, afps: [], blkOnly: false }, flowAfps, flowPeriod),
+    [date, flowAfps, flowPeriod],
+  );
+  const flowChartData = useMemo(
+    () =>
+      flowBubbles.map((b) => ({
+        x: b.etfNnb,
+        y: b.mfNnb,
+        z: b.iSharesShare == null ? 0 : Math.max(0.02, Math.abs(b.iSharesShare)) * 100,
+        cat: b.category,
+        share: b.iSharesShare,
+      })),
+    [flowBubbles],
+  );
+  void AFPS;
+
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Flows & Fee Intelligence</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Flows Intelligence</h1>
         <p className="text-sm text-muted-foreground">Where money is moving and how it's priced.</p>
       </div>
 
@@ -184,6 +274,151 @@ export function Flows() {
           </div>
         </div>
       </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <CardShell
+          title="YTD NNB by Manager"
+          subtitle="Cumulative net new business, stacked by manager"
+          right={
+            <>
+              <SegmentedToggle options={BUCKET_TOGGLE} value={nnbBucket} onChange={setNnbBucket} />
+              <AfpFilterPopover value={nnbAfps} onChange={setNnbAfps} />
+            </>
+          }
+        >
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={nnbSeries.data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
+                <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
+                <YAxis tickFormatter={(v) => formatUSD(v)} stroke="#999" fontSize={11} width={70} />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(v: number, n) => [formatUSD(v), n]}
+                  labelFormatter={(l) => shortMonth(l as string)}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {nnbSeries.brands.map((b) => (
+                  <Area
+                    key={b}
+                    type="monotone"
+                    dataKey={b}
+                    stackId="1"
+                    stroke={brandColor(b)}
+                    fill={brandColor(b)}
+                    fillOpacity={0.75}
+                    isAnimationActive={false}
+                  />
+                ))}
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </CardShell>
+
+        <CardShell
+          title="YTD NNBF by Manager"
+          subtitle="Cumulative new-flow fee revenue, stacked by manager"
+          right={
+            <>
+              <SegmentedToggle options={BUCKET_TOGGLE} value={nnbfBucket} onChange={setNnbfBucket} />
+              <AfpFilterPopover value={nnbfAfps} onChange={setNnbfAfps} />
+            </>
+          }
+        >
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={nnbfSeries.data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
+                <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
+                <YAxis tickFormatter={(v) => formatUSD(v)} stroke="#999" fontSize={11} width={70} />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(v: number, n) => [formatUSD(v), n]}
+                  labelFormatter={(l) => shortMonth(l as string)}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {nnbfSeries.brands.map((b) => (
+                  <Area
+                    key={b}
+                    type="monotone"
+                    dataKey={b}
+                    stackId="1"
+                    stroke={brandColor(b)}
+                    fill={brandColor(b)}
+                    fillOpacity={0.75}
+                    isAnimationActive={false}
+                  />
+                ))}
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </CardShell>
+      </div>
+
+      <CardShell
+        title="Flows by Category — ETF vs Mutual Fund"
+        subtitle="Bubble size = iShares share of ETF NNB within category"
+        right={
+          <>
+            <SegmentedToggle options={PERIOD_TOGGLE} value={flowPeriod} onChange={setFlowPeriod} />
+            <AfpFilterPopover value={flowAfps} onChange={setFlowAfps} />
+          </>
+        }
+      >
+        <div className="h-96">
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 16, right: 32, left: 16, bottom: 24 }}>
+              <CartesianGrid stroke={CHART_COLORS.grid} />
+              <XAxis
+                type="number"
+                dataKey="x"
+                name="ETF NNB"
+                tickFormatter={(v: number) => formatUSD(v)}
+                stroke="#999"
+                fontSize={11}
+                label={{ value: "ETF Flows (NNB)", position: "insideBottom", offset: -10, fontSize: 11, fill: "#666" }}
+              />
+              <YAxis
+                type="number"
+                dataKey="y"
+                name="MF NNB"
+                tickFormatter={(v: number) => formatUSD(v)}
+                stroke="#999"
+                fontSize={11}
+                width={70}
+                label={{ value: "Mutual Fund Flows (NNB)", angle: -90, position: "insideLeft", fontSize: 11, fill: "#666" }}
+              />
+              <ZAxis type="number" dataKey="z" range={[80, 900]} />
+              <ReferenceLine x={0} stroke="#999" />
+              <ReferenceLine y={0} stroke="#999" />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                cursor={{ strokeDasharray: "3 3" }}
+                formatter={(v: number, n: string, p: { payload?: { share: number | null } }) => {
+                  if (n === "ETF NNB") return [formatUSD(v), "ETF NNB"];
+                  if (n === "MF NNB") return [formatUSD(v), "MF NNB"];
+                  if (n === "z") {
+                    const s = p?.payload?.share;
+                    return [s == null ? "n/a" : `${(s * 100).toFixed(1)}%`, "iShares share of ETF NNB"];
+                  }
+                  return [v, n];
+                }}
+                labelFormatter={(_, items) => (items?.[0]?.payload as { cat?: string })?.cat ?? ""}
+              />
+              <Scatter
+                name="Category"
+                data={flowChartData}
+                fill={CHART_COLORS.blk}
+                fillOpacity={0.7}
+                stroke={CHART_COLORS.blk}
+                isAnimationActive={false}
+              >
+                <LabelList dataKey="cat" position="top" style={{ fontSize: 10, fill: "#333" }} />
+              </Scatter>
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
+      </CardShell>
     </div>
   );
 }
