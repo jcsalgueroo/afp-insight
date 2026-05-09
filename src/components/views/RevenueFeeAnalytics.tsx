@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import {
-  BarChart,
   Bar,
   XAxis,
   YAxis,
@@ -28,7 +27,6 @@ export function RevenueFeeAnalytics() {
     () => getAUMvsFee({ date, afps: [], blkOnly }),
     [date, blkOnly],
   );
-  void BarChart;
 
   return (
     <div className="p-6 space-y-6">
