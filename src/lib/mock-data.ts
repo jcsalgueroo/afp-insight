@@ -550,3 +550,198 @@ export function getCategoryFlowBubbles(
     return { category: cat, etfNnb, mfNnb, iSharesShare };
   });
 }
+
+// ---------- AFP Deep Dive selectors ----------
+
+function bucketIsBLKBrand(b: Bucket) {
+  return b === "ETF" ? "iShares" : "BlackRock";
+}
+
+/** Manager (Top 5 by AUM + Other) → Category, with `dominant` flag for BLK/iShares leaves. */
+export function getAFPCompositionTree(afps: AFP[], bucket: Bucket, monthDate: string) {
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      r.Date === monthDate &&
+      (afps.length === 0 || afps.includes(r.AFP)) &&
+      bucketOf(r) === bucket,
+  );
+  const byManager = new Map<Manager, number>();
+  for (const r of rows) byManager.set(r.Manager, (byManager.get(r.Manager) ?? 0) + r.AUM_USD);
+  const sorted = [...byManager.entries()].sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, 5).map(([m]) => m);
+  const others = sorted.slice(5).map(([m]) => m);
+
+  // Per-category, per-manager AUM totals (within selected AFPs + bucket)
+  const catManagerAum = new Map<Category, Map<Manager, number>>();
+  for (const r of rows) {
+    if (!catManagerAum.has(r.Category)) catManagerAum.set(r.Category, new Map());
+    const m = catManagerAum.get(r.Category)!;
+    m.set(r.Manager, (m.get(r.Manager) ?? 0) + r.AUM_USD);
+  }
+
+  const blkBrandLabel = bucketIsBLKBrand(bucket); // iShares for ETF, BlackRock for MF
+
+  const buildChildren = (managerKeys: Manager[], displayName: string) => {
+    // aggregate AUM per category across the manager keys
+    const perCat = new Map<Category, number>();
+    for (const cat of CATEGORIES) {
+      let v = 0;
+      for (const m of managerKeys) v += catManagerAum.get(cat)?.get(m) ?? 0;
+      if (v > 0) perCat.set(cat, v);
+    }
+    return [...perCat.entries()].map(([cat, size]) => {
+      // Dominance check only relevant for the BLK/iShares group
+      let dominant = false;
+      if (managerKeys.length === 1 && managerKeys[0] === "BlackRock") {
+        const blkAum = catManagerAum.get(cat)?.get("BlackRock") ?? 0;
+        let maxOther = 0;
+        for (const [mgr, v] of catManagerAum.get(cat) ?? []) {
+          if (mgr === "BlackRock") continue;
+          if (v > maxOther) maxOther = v;
+        }
+        dominant = maxOther > blkAum;
+      }
+      return {
+        name: cat,
+        size,
+        manager: displayName,
+        category: cat,
+        dominant,
+        isBLK: managerKeys.length === 1 && managerKeys[0] === "BlackRock",
+      };
+    });
+  };
+
+  const result: Array<{ name: string; isBLK: boolean; children: ReturnType<typeof buildChildren> }> = [];
+  for (const m of top) {
+    const display = m === "BlackRock" ? blkBrandLabel : m;
+    result.push({ name: display, isBLK: m === "BlackRock", children: buildChildren([m], display) });
+  }
+  if (others.length) {
+    result.push({ name: "Other", isBLK: false, children: buildChildren(others, "Other") });
+  }
+  return result;
+}
+
+/** ETF vs Mutual Fund AUM totals filtered by category list. */
+export function getAfpEtfMfDonut(
+  afps: AFP[],
+  categories: Category[],
+  monthDate: string,
+) {
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      r.Date === monthDate &&
+      (afps.length === 0 || afps.includes(r.AFP)) &&
+      (categories.length === 0 || categories.includes(r.Category)),
+  );
+  const etf = sumBy(rows.filter((r) => bucketOf(r) === "ETF"), (r) => r.AUM_USD);
+  const mf = sumBy(rows.filter((r) => bucketOf(r) === "Mutual Fund"), (r) => r.AUM_USD);
+  return [
+    { name: "ETF", value: etf },
+    { name: "Mutual Fund", value: mf },
+  ];
+}
+
+/** NNB stacked by Category for each Manager, sorted by absolute total descending. */
+export function getNnbByManagerStacked(
+  afps: AFP[],
+  period: "Month" | "YTD",
+  bucket: Bucket,
+  monthDate: string,
+) {
+  const monthList = period === "Month" ? [monthDate] : monthsYTD(monthDate);
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      monthList.includes(r.Date) &&
+      (afps.length === 0 || afps.includes(r.AFP)) &&
+      bucketOf(r) === bucket,
+  );
+  const byMgr = new Map<Manager, Record<string, number> & { Manager: Manager; total: number }>();
+  for (const r of rows) {
+    if (!byMgr.has(r.Manager)) {
+      const init = { Manager: r.Manager, total: 0 } as Record<string, number> & {
+        Manager: Manager;
+        total: number;
+      };
+      for (const c of CATEGORIES) init[c] = 0;
+      byMgr.set(r.Manager, init);
+    }
+    const row = byMgr.get(r.Manager)!;
+    row[r.Category] = (row[r.Category] as number) + r.NNB_USD;
+    row.total += r.NNB_USD;
+  }
+  return [...byMgr.values()].sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+}
+
+const CATEGORY_COLORS: Record<Category, string> = {
+  "Equity DM": "#00B140",
+  "Equity EM": "#1F7A3A",
+  "Fixed Income IG": "#000000",
+  "High Yield": "#7A7A7A",
+  "Money Market": "#B8B8B8",
+};
+export function categoryColor(c: Category) {
+  return CATEGORY_COLORS[c];
+}
+
+/** Derive a fake ticker from an ISIN (last 4 alphanumerics). */
+export function tickerOf(isin: string) {
+  return isin.slice(-4).toUpperCase();
+}
+
+/** Per-position rows for the AFP positions table. */
+export function getAfpPositions(
+  afps: AFP[],
+  portfolio: PortfolioType | "All",
+  bucket: Bucket,
+  monthDate: string,
+) {
+  const ytd = monthsYTD(monthDate);
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      ytd.includes(r.Date) &&
+      (afps.length === 0 || afps.includes(r.AFP)) &&
+      (portfolio === "All" || r.Portfolio_Type === portfolio) &&
+      bucketOf(r) === bucket,
+  );
+
+  // Total AUM (current month only, same scope) for weight denominator
+  const monthRows = rows.filter((r) => r.Date === monthDate);
+  const totalAum = sumBy(monthRows, (r) => r.AUM_USD) || 1;
+
+  type Agg = {
+    isin: string;
+    name: string;
+    manager: Manager;
+    category: Category;
+    aum: number;
+    monthNnb: number;
+    ytdNnb: number;
+  };
+  const map = new Map<string, Agg>();
+  for (const r of rows) {
+    const cur =
+      map.get(r.ISIN) ??
+      ({
+        isin: r.ISIN,
+        name: r.Name,
+        manager: r.Manager,
+        category: r.Category,
+        aum: 0,
+        monthNnb: 0,
+        ytdNnb: 0,
+      } as Agg);
+    if (r.Date === monthDate) {
+      cur.aum += r.AUM_USD;
+      cur.monthNnb += r.NNB_USD;
+    }
+    cur.ytdNnb += r.NNB_USD;
+    map.set(r.ISIN, cur);
+  }
+  return [...map.values()].map((a) => ({
+    ...a,
+    ticker: tickerOf(a.isin),
+    weight: a.aum / totalAum,
+  }));
+}

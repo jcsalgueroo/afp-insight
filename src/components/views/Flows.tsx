@@ -29,7 +29,8 @@ import {
 import { useDashboard } from "@/lib/dashboard-store";
 
 export function Flows() {
-  const { date, afps, blkOnly } = useDashboard();
+  const { date, blkOnly } = useDashboard();
+  const afps: never[] = [];
   const filters = { date, afps, blkOnly };
 
   // Waterfall: stacked transparent base + delta

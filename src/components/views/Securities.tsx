@@ -17,8 +17,11 @@ import { applyFilters, formatBps, formatUSD, MASTER_DATA, type MasterRow } from 
 import { cn } from "@/lib/utils";
 
 export function Securities() {
-  const { date, afps, blkOnly } = useDashboard();
-  const data = useMemo(() => applyFilters(MASTER_DATA, { date, afps, blkOnly }), [date, afps, blkOnly]);
+  const { date, blkOnly } = useDashboard();
+  const data = useMemo(
+    () => applyFilters(MASTER_DATA, { date, afps: [], blkOnly }),
+    [date, blkOnly],
+  );
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "AUM_USD", desc: true }]);
   const [globalFilter, setGlobalFilter] = useState("");
