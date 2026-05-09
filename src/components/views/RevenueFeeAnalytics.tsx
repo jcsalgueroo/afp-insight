@@ -52,11 +52,13 @@ import { cn } from "@/lib/utils";
 const BUCKET_TOGGLE = [
   { value: "ETF" as Bucket, label: "ETF" },
   { value: "Mutual Fund" as Bucket, label: "MF" },
+  { value: "Money Market" as Bucket, label: "MM" },
 ] as const;
 const BUCKET_ALL_TOGGLE = [
   { value: "All" as const, label: "All" },
   { value: "ETF" as const, label: "ETF" },
   { value: "Mutual Fund" as const, label: "MF" },
+  { value: "Money Market" as const, label: "MM" },
 ] as const;
 const PERIOD_TOGGLE = [
   { value: "Month" as const, label: "Month" },
