@@ -11,33 +11,38 @@ import {
   ScatterChart,
   Scatter,
   ZAxis,
-  ComposedChart,
-  Line,
   Legend,
   AreaChart,
   Area,
   ReferenceLine,
   LabelList,
+  PieChart as RPieChart,
+  Pie,
 } from "recharts";
 import {
-  AFPS,
   brandColor,
+  BUCKET_COLOR,
+  CATEGORIES,
+  categoryColor,
   CHART_COLORS,
-  formatBps,
   formatUSD,
-  getAUMvsFee,
   getCategoryFlowBubbles,
-  getNNBByManager,
-  getScatter,
+  getCumulativeNnbStacked,
+  getMonthlyBucketFlows,
+  getNnbDonut,
+  getScatterFiltered,
+  getTopBottomSecurities,
   getYtdByManagerSeries,
   managerColor,
   MANAGERS,
   type AFP,
   type Bucket,
+  type Category,
   type Manager,
 } from "@/lib/mock-data";
 import { useDashboard } from "@/lib/dashboard-store";
 import { AfpFilterPopover } from "@/components/widgets/AfpFilterPopover";
+import { MultiSelectPopover } from "@/components/widgets/MultiSelectPopover";
 import { SegmentedToggle } from "@/components/widgets/SegmentedToggle";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +54,11 @@ const BUCKET_TOGGLE = [
 const PERIOD_TOGGLE = [
   { value: "Month" as const, label: "Month" },
   { value: "YTD" as const, label: "YTD" },
+] as const;
+
+const SORT_TOGGLE = [
+  { value: "Manager" as const, label: "By Manager" },
+  { value: "Category" as const, label: "By Category" },
 ] as const;
 
 const tooltipStyle = { fontSize: 12, border: "1px solid #E5E5E5", borderRadius: 4 } as const;
@@ -86,32 +96,57 @@ function CardShell({
 }
 
 export function Flows() {
-  const { date, blkOnly } = useDashboard();
-  const afps: AFP[] = [];
-  const filters = { date, afps, blkOnly };
+  const { date } = useDashboard();
 
-  // Waterfall: stacked transparent base + delta
-  const nnb = useMemo(() => {
-    const raw = getNNBByManager(filters).sort((a, b) => b.NNB - a.NNB);
-    let cumulative = 0;
-    return raw.map((d) => {
-      const start = d.NNB >= 0 ? cumulative : cumulative + d.NNB;
-      const value = Math.abs(d.NNB);
-      cumulative += d.NNB;
-      return { Manager: d.Manager, base: start, value, raw: d.NNB };
-    });
-  }, [date, afps, blkOnly]);
+  // 1) Donut state
+  const [donutBucket, setDonutBucket] = useState<Bucket>("ETF");
+  const [donutPeriod, setDonutPeriod] = useState<"Month" | "YTD">("YTD");
+  const [donutAfps, setDonutAfps] = useState<AFP[]>([]);
+  const donutData = useMemo(
+    () => getNnbDonut(donutAfps, donutBucket, donutPeriod, date),
+    [donutAfps, donutBucket, donutPeriod, date],
+  );
+  const donutTotal = donutData.reduce((a, b) => a + b.NNB, 0);
 
-  const scatter = useMemo(() => getScatter(filters), [date, afps, blkOnly]);
-  const aumFee = useMemo(() => getAUMvsFee(filters), [date, afps, blkOnly]);
+  // 2) Cumulative stacked
+  const [cumBucket, setCumBucket] = useState<Bucket>("ETF");
+  const [cumPeriod, setCumPeriod] = useState<"Month" | "YTD">("YTD");
+  const [cumSort, setCumSort] = useState<"Manager" | "Category">("Manager");
+  const [cumAfps, setCumAfps] = useState<AFP[]>([]);
+  const cum = useMemo(
+    () => getCumulativeNnbStacked(cumAfps, cumBucket, cumPeriod, date, cumSort),
+    [cumAfps, cumBucket, cumPeriod, date, cumSort],
+  );
 
-  // Group scatter by manager for legend
+  // 3) Performance vs Flows
+  const [perfPeriod, setPerfPeriod] = useState<"Month" | "YTD">("YTD");
+  const [perfAfps, setPerfAfps] = useState<AFP[]>([]);
+  const [perfManagers, setPerfManagers] = useState<Manager[]>([]);
+  const [perfCats, setPerfCats] = useState<Category[]>([]);
+  const scatter = useMemo(
+    () => getScatterFiltered(perfAfps, perfManagers, perfCats, perfPeriod, date),
+    [perfAfps, perfManagers, perfCats, perfPeriod, date],
+  );
   const scatterByManager = MANAGERS.map((m) => ({
     manager: m,
     data: scatter.filter((s) => s.Manager === m),
   })).filter((s) => s.data.length > 0);
 
-  // Moved-from-Scorecard state
+  // 4) Top/Bottom securities
+  const [tbBucket, setTbBucket] = useState<Bucket>("ETF");
+  const [tbPeriod, setTbPeriod] = useState<"Month" | "YTD">("YTD");
+  const [tbAfps, setTbAfps] = useState<AFP[]>([]);
+  const [tbManagers, setTbManagers] = useState<Manager[]>([]);
+  const tb = useMemo(
+    () => getTopBottomSecurities(tbAfps, tbManagers, tbBucket, tbPeriod, date),
+    [tbAfps, tbManagers, tbBucket, tbPeriod, date],
+  );
+
+  // 5) Monthly bucket flows
+  const [monthlyAfps, setMonthlyAfps] = useState<AFP[]>([]);
+  const monthly = useMemo(() => getMonthlyBucketFlows(monthlyAfps), [monthlyAfps]);
+
+  // 6) Existing kept charts
   const [nnbBucket, setNnbBucket] = useState<Bucket>("ETF");
   const [nnbAfps, setNnbAfps] = useState<AFP[]>([]);
   const [nnbfBucket, setNnbfBucket] = useState<Bucket>("ETF");
@@ -142,7 +177,12 @@ export function Flows() {
       })),
     [flowBubbles],
   );
-  void AFPS;
+
+  const stackKeysCum = cum.stackKeys;
+  const colorForStack = (k: string) =>
+    cumSort === "Manager"
+      ? categoryColor(k as Category)
+      : managerColor(k as Manager);
 
   return (
     <div className="p-6 space-y-6">
@@ -151,130 +191,241 @@ export function Flows() {
         <p className="text-sm text-muted-foreground">Where money is moving and how it's priced.</p>
       </div>
 
-      <div className="bg-card border border-border rounded-md shadow-sm">
-        <div className="px-5 py-4 border-b border-border">
-          <h2 className="text-sm font-semibold uppercase tracking-wide">NNB by Manager (Waterfall)</h2>
-        </div>
-        <div className="h-72 p-3">
+      {/* 1) Donut */}
+      <CardShell
+        title="NNB by Manager"
+        subtitle="Top 5 managers by NNB + Others"
+        right={
+          <>
+            <SegmentedToggle options={BUCKET_TOGGLE} value={donutBucket} onChange={setDonutBucket} />
+            <SegmentedToggle options={PERIOD_TOGGLE} value={donutPeriod} onChange={setDonutPeriod} />
+            <AfpFilterPopover value={donutAfps} onChange={setDonutAfps} />
+          </>
+        }
+      >
+        <div className="h-80 relative">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={nnb}>
-              <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
-              <XAxis dataKey="Manager" stroke="#999" fontSize={11} />
-              <YAxis stroke="#999" fontSize={11} tickFormatter={(v) => formatUSD(v)} />
+            <RPieChart>
               <Tooltip
-                cursor={{ fill: "#f5f5f5" }}
-                formatter={(_v: number, _n: string, p: { payload?: { raw: number } }) =>
-                  formatUSD(p.payload?.raw ?? 0)
-                }
-                contentStyle={{ fontSize: 12, border: "1px solid #E5E5E5", borderRadius: 4 }}
+                contentStyle={tooltipStyle}
+                formatter={(v: number, _n, p: { payload?: { Manager: string } }) => [
+                  `${formatUSD(v)} (${donutTotal ? ((v / donutTotal) * 100).toFixed(1) : 0}%)`,
+                  p?.payload?.Manager ?? "",
+                ]}
               />
-              <Bar dataKey="base" stackId="a" fill="transparent" />
-              <Bar dataKey="value" stackId="a">
-                {nnb.map((d, i) => (
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Pie
+                data={donutData}
+                dataKey="NNB"
+                nameKey="Manager"
+                cx="50%"
+                cy="50%"
+                innerRadius={70}
+                outerRadius={110}
+                paddingAngle={1}
+                isAnimationActive={false}
+              >
+                {donutData.map((d, i) => (
                   <Cell
                     key={i}
                     fill={
-                      d.Manager === "BlackRock"
-                        ? CHART_COLORS.blk
-                        : d.raw >= 0
-                          ? CHART_COLORS.positive
-                          : CHART_COLORS.negative
+                      d.Manager === "Others"
+                        ? "#CCCCCC"
+                        : managerColor(d.Manager as Manager)
                     }
+                  />
+                ))}
+              </Pie>
+            </RPieChart>
+          </ResponsiveContainer>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Total NNB</span>
+            <span className="text-lg font-semibold">{formatUSD(donutTotal)}</span>
+          </div>
+        </div>
+      </CardShell>
+
+      {/* 2) Cumulative NNB stacked */}
+      <CardShell
+        title="Cumulative NNB"
+        subtitle={
+          cumSort === "Manager"
+            ? "Managers on X-axis, stacked by Category"
+            : "Categories on X-axis, stacked by Manager"
+        }
+        right={
+          <>
+            <SegmentedToggle options={BUCKET_TOGGLE} value={cumBucket} onChange={setCumBucket} />
+            <SegmentedToggle options={PERIOD_TOGGLE} value={cumPeriod} onChange={setCumPeriod} />
+            <SegmentedToggle options={SORT_TOGGLE} value={cumSort} onChange={setCumSort} />
+            <AfpFilterPopover value={cumAfps} onChange={setCumAfps} />
+          </>
+        }
+      >
+        <div className="h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={cum.data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
+              <XAxis dataKey="key" stroke="#999" fontSize={11} />
+              <YAxis tickFormatter={(v) => formatUSD(v)} stroke="#999" fontSize={11} width={70} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(v: number, n) => [formatUSD(v), n]}
+              />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {stackKeysCum.map((k) => (
+                <Bar key={k} dataKey={k} stackId="1" fill={colorForStack(k)} isAnimationActive={false} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </CardShell>
+
+      {/* 3) Performance vs Flows */}
+      <CardShell
+        title="Performance vs Flows"
+        subtitle="Bubble size = AUM"
+        right={
+          <>
+            <SegmentedToggle options={PERIOD_TOGGLE} value={perfPeriod} onChange={setPerfPeriod} />
+            <AfpFilterPopover value={perfAfps} onChange={setPerfAfps} />
+            <MultiSelectPopover
+              label="Managers"
+              options={MANAGERS}
+              value={perfManagers}
+              onChange={setPerfManagers}
+            />
+            <MultiSelectPopover
+              label="Categories"
+              options={CATEGORIES}
+              value={perfCats}
+              onChange={setPerfCats}
+            />
+          </>
+        }
+      >
+        <div className="h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 10, right: 10, bottom: 20, left: 10 }}>
+              <CartesianGrid stroke={CHART_COLORS.grid} />
+              <XAxis
+                type="number"
+                dataKey="Perf"
+                name={perfPeriod === "YTD" ? "YTD %" : "Month %"}
+                stroke="#999"
+                fontSize={11}
+                tickFormatter={(v) => `${v}%`}
+              />
+              <YAxis
+                type="number"
+                dataKey="NNB"
+                name="NNB"
+                stroke="#999"
+                fontSize={11}
+                tickFormatter={(v) => formatUSD(v)}
+              />
+              <ZAxis type="number" dataKey="AUM" range={[40, 400]} />
+              <Tooltip
+                cursor={{ strokeDasharray: "3 3" }}
+                contentStyle={tooltipStyle}
+                formatter={(v: number, n: string) =>
+                  n === "Perf" ? `${v}%` : formatUSD(v)
+                }
+              />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {scatterByManager.map((g) => (
+                <Scatter
+                  key={g.manager}
+                  name={g.manager}
+                  data={g.data}
+                  fill={managerColor(g.manager as Manager)}
+                  fillOpacity={g.manager === "BlackRock" ? 0.85 : 0.6}
+                />
+              ))}
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
+      </CardShell>
+
+      {/* 4) Top/Bottom 5 securities */}
+      <CardShell
+        title="Top 5 / Bottom 5 Securities by Flows"
+        subtitle={tbBucket === "ETF" ? "ETFs by Ticker" : "Mutual Funds by Name"}
+        right={
+          <>
+            <SegmentedToggle options={BUCKET_TOGGLE} value={tbBucket} onChange={setTbBucket} />
+            <SegmentedToggle options={PERIOD_TOGGLE} value={tbPeriod} onChange={setTbPeriod} />
+            <AfpFilterPopover value={tbAfps} onChange={setTbAfps} />
+            <MultiSelectPopover
+              label="Managers"
+              options={MANAGERS}
+              value={tbManagers}
+              onChange={setTbManagers}
+            />
+          </>
+        }
+      >
+        <div className="h-96">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={tb}
+              layout="vertical"
+              margin={{ top: 8, right: 16, left: 16, bottom: 8 }}
+            >
+              <CartesianGrid stroke={CHART_COLORS.grid} horizontal={false} />
+              <XAxis type="number" tickFormatter={(v) => formatUSD(v)} stroke="#999" fontSize={11} />
+              <YAxis
+                type="category"
+                dataKey="label"
+                stroke="#999"
+                fontSize={tbBucket === "ETF" ? 11 : 10}
+                width={tbBucket === "ETF" ? 80 : 220}
+              />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(v: number) => [formatUSD(v), "NNB"]}
+              />
+              <ReferenceLine x={0} stroke="#999" />
+              <Bar dataKey="nnb" isAnimationActive={false}>
+                {tb.map((d, i) => (
+                  <Cell
+                    key={i}
+                    fill={d.nnb >= 0 ? CHART_COLORS.positive : CHART_COLORS.negative}
                   />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </div>
+      </CardShell>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-card border border-border rounded-md shadow-sm">
-          <div className="px-5 py-4 border-b border-border">
-            <h2 className="text-sm font-semibold uppercase tracking-wide">Performance vs Flows</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Bubble size = AUM</p>
-          </div>
-          <div className="h-80 p-3">
-            <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 10, right: 10, bottom: 20, left: 10 }}>
-                <CartesianGrid stroke={CHART_COLORS.grid} />
-                <XAxis
-                  type="number"
-                  dataKey="Perf"
-                  name="YTD %"
-                  stroke="#999"
-                  fontSize={11}
-                  tickFormatter={(v) => `${v}%`}
-                />
-                <YAxis
-                  type="number"
-                  dataKey="NNB"
-                  name="NNB"
-                  stroke="#999"
-                  fontSize={11}
-                  tickFormatter={(v) => formatUSD(v)}
-                />
-                <ZAxis type="number" dataKey="AUM" range={[40, 400]} />
-                <Tooltip
-                  cursor={{ strokeDasharray: "3 3" }}
-                  contentStyle={{ fontSize: 12, border: "1px solid #E5E5E5", borderRadius: 4 }}
-                  formatter={(v: number, n: string) =>
-                    n === "Perf" ? `${v}%` : formatUSD(v)
-                  }
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                {scatterByManager.map((g) => (
-                  <Scatter
-                    key={g.manager}
-                    name={g.manager}
-                    data={g.data}
-                    fill={managerColor(g.manager as Manager)}
-                    fillOpacity={g.manager === "BlackRock" ? 0.85 : 0.6}
-                  />
-                ))}
-              </ScatterChart>
-            </ResponsiveContainer>
-          </div>
+      {/* 5) Monthly Flows by Bucket */}
+      <CardShell
+        title="Monthly Flows by Bucket"
+        subtitle="NNB stacked by ETF / Mutual Fund / Money Market"
+        right={<AfpFilterPopover value={monthlyAfps} onChange={setMonthlyAfps} />}
+      >
+        <div className="h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={monthly} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
+              <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
+              <YAxis tickFormatter={(v) => formatUSD(v)} stroke="#999" fontSize={11} width={70} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(v: number, n) => [formatUSD(v), n]}
+                labelFormatter={(l) => shortMonth(l as string)}
+              />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="ETF" stackId="1" fill={BUCKET_COLOR.ETF} isAnimationActive={false} />
+              <Bar dataKey="Mutual Fund" stackId="1" fill={BUCKET_COLOR["Mutual Fund"]} isAnimationActive={false} />
+              <Bar dataKey="Money Market" stackId="1" fill={BUCKET_COLOR["Money Market"]} isAnimationActive={false} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
+      </CardShell>
 
-        <div className="bg-card border border-border rounded-md shadow-sm">
-          <div className="px-5 py-4 border-b border-border">
-            <h2 className="text-sm font-semibold uppercase tracking-wide">AUM vs Avg Fee by Manager</h2>
-          </div>
-          <div className="h-80 p-3">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={aumFee}>
-                <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
-                <XAxis dataKey="Manager" stroke="#999" fontSize={11} />
-                <YAxis yAxisId="left" stroke="#999" fontSize={11} tickFormatter={(v) => formatUSD(v)} />
-                <YAxis yAxisId="right" orientation="right" stroke="#999" fontSize={11} tickFormatter={(v) => `${v.toFixed(0)}`} />
-                <Tooltip
-                  formatter={(v: number, n: string) =>
-                    n === "Fee_bps" ? formatBps(v) : formatUSD(v)
-                  }
-                  contentStyle={{ fontSize: 12, border: "1px solid #E5E5E5", borderRadius: 4 }}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar yAxisId="left" dataKey="AUM" name="AUM">
-                  {aumFee.map((d, i) => (
-                    <Cell key={i} fill={managerColor(d.Manager as Manager)} />
-                  ))}
-                </Bar>
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="Fee_bps"
-                  stroke={CHART_COLORS.blkAlt}
-                  strokeWidth={2}
-                  dot={{ r: 3, fill: CHART_COLORS.blkAlt }}
-                  name="Avg Fee (bps)"
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
+      {/* Kept charts */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <CardShell
           title="YTD NNB by Manager"
