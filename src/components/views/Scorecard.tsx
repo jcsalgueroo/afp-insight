@@ -303,151 +303,58 @@ export function Scorecard() {
       </div>
 
       {/* YTD NNB + NNBF area charts */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <CardShell
-          title="YTD NNB by Manager"
-          subtitle="Cumulative net new business, stacked by manager"
-          right={
-            <>
-              <SegmentedToggle options={BUCKET_TOGGLE} value={nnbBucket} onChange={setNnbBucket} />
-              <AfpFilterPopover value={nnbAfps} onChange={setNnbAfps} />
-            </>
-          }
-        >
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={nnbSeries.data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
-                <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
-                <YAxis tickFormatter={(v) => formatUSD(v)} stroke="#999" fontSize={11} width={70} />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  formatter={(v: number, n) => [formatUSD(v), n]}
-                  labelFormatter={(l) => shortMonth(l as string)}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                {nnbSeries.brands.map((b) => (
-                  <Area
-                    key={b}
-                    type="monotone"
-                    dataKey={b}
-                    stackId="1"
-                    stroke={brandColor(b)}
-                    fill={brandColor(b)}
-                    fillOpacity={0.75}
-                    isAnimationActive={false}
-                  />
-                ))}
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </CardShell>
-
-        <CardShell
-          title="YTD NNBF by Manager"
-          subtitle="Cumulative new-flow fee revenue, stacked by manager"
-          right={
-            <>
-              <SegmentedToggle options={BUCKET_TOGGLE} value={nnbfBucket} onChange={setNnbfBucket} />
-              <AfpFilterPopover value={nnbfAfps} onChange={setNnbfAfps} />
-            </>
-          }
-        >
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={nnbfSeries.data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
-                <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
-                <YAxis tickFormatter={(v) => formatUSD(v)} stroke="#999" fontSize={11} width={70} />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  formatter={(v: number, n) => [formatUSD(v), n]}
-                  labelFormatter={(l) => shortMonth(l as string)}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                {nnbfSeries.brands.map((b) => (
-                  <Area
-                    key={b}
-                    type="monotone"
-                    dataKey={b}
-                    stackId="1"
-                    stroke={brandColor(b)}
-                    fill={brandColor(b)}
-                    fillOpacity={0.75}
-                    isAnimationActive={false}
-                  />
-                ))}
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </CardShell>
+      {/* AUM Org composition by Category — ETF & MF */}
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          AUM Org Composition by Category
+        </h2>
+        <AfpFilterPopover value={compAfps} onChange={setCompAfps} />
       </div>
-
-      {/* Flows by Category — ETF vs MF */}
-      <CardShell
-        title="Flows by Category — ETF vs Mutual Fund"
-        subtitle="Bubble size = iShares share of ETF NNB within category"
-        right={
-          <>
-            <SegmentedToggle options={PERIOD_TOGGLE} value={flowPeriod} onChange={setFlowPeriod} />
-            <AfpFilterPopover value={flowAfps} onChange={setFlowAfps} />
-          </>
-        }
-      >
-        <div className="h-96">
-          <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart margin={{ top: 16, right: 32, left: 16, bottom: 24 }}>
-              <CartesianGrid stroke={CHART_COLORS.grid} />
-              <XAxis
-                type="number"
-                dataKey="x"
-                name="ETF NNB"
-                tickFormatter={(v: number) => formatUSD(v)}
-                stroke="#999"
-                fontSize={11}
-                label={{ value: "ETF Flows (NNB)", position: "insideBottom", offset: -10, fontSize: 11, fill: "#666" }}
-              />
-              <YAxis
-                type="number"
-                dataKey="y"
-                name="MF NNB"
-                tickFormatter={(v: number) => formatUSD(v)}
-                stroke="#999"
-                fontSize={11}
-                width={70}
-                label={{ value: "Mutual Fund Flows (NNB)", angle: -90, position: "insideLeft", fontSize: 11, fill: "#666" }}
-              />
-              <ZAxis type="number" dataKey="z" range={[80, 900]} />
-              <ReferenceLine x={0} stroke="#999" />
-              <ReferenceLine y={0} stroke="#999" />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                cursor={{ strokeDasharray: "3 3" }}
-                formatter={(v: number, n: string, p: { payload?: { share: number | null } }) => {
-                  if (n === "ETF NNB") return [formatUSD(v), "ETF NNB"];
-                  if (n === "MF NNB") return [formatUSD(v), "MF NNB"];
-                  if (n === "z") {
-                    const s = p?.payload?.share;
-                    return [s == null ? "n/a" : `${(s * 100).toFixed(1)}%`, "iShares share of ETF NNB"];
-                  }
-                  return [v, n];
-                }}
-                labelFormatter={(_, items) => (items?.[0]?.payload as { cat?: string })?.cat ?? ""}
-              />
-              <Scatter
-                name="Category"
-                data={flowChartData}
-                fill={CHART_COLORS.blk}
-                fillOpacity={0.7}
-                stroke={CHART_COLORS.blk}
-                isAnimationActive={false}
-              >
-                <LabelList dataKey="cat" position="top" style={{ fontSize: 10, fill: "#333" }} />
-              </Scatter>
-            </ScatterChart>
-          </ResponsiveContainer>
-        </div>
-      </CardShell>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {([
+          { title: "ETF — Composition by Category", data: etfComp },
+          { title: "Mutual Fund — Composition by Category", data: mfComp },
+        ] as const).map((card) => (
+          <CardShell key={card.title} title={card.title} subtitle="100% stacked share of AUM Org over time">
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={card.data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
+                  <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
+                  <YAxis
+                    domain={[0, 1]}
+                    tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
+                    stroke="#999"
+                    fontSize={11}
+                    width={45}
+                  />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    labelFormatter={(l) => shortMonth(l as string)}
+                    formatter={(v: number, n: string, p: { payload?: { __raw?: Record<string, number> } }) => {
+                      const raw = p?.payload?.__raw?.[n] ?? 0;
+                      return [`${formatUSD(raw)} (${(v * 100).toFixed(1)}%)`, n];
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {compCats.map((c) => (
+                    <Area
+                      key={c}
+                      type="monotone"
+                      dataKey={c}
+                      stackId="1"
+                      stroke={categoryColor(c)}
+                      fill={categoryColor(c)}
+                      fillOpacity={0.8}
+                      isAnimationActive={false}
+                    />
+                  ))}
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardShell>
+        ))}
+      </div>
     </div>
   );
 }
