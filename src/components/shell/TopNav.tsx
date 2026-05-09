@@ -2,7 +2,7 @@ import { Check, ChevronDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { useDashboard } from "@/lib/dashboard-store";
-import { AFPS, MONTHS } from "@/lib/mock-data";
+import { MONTHS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
 function formatMonth(m: string) {
@@ -12,7 +12,7 @@ function formatMonth(m: string) {
 }
 
 export function TopNav() {
-  const { date, setDate, afps, toggleAfp, setAfps, blkOnly, setBlkOnly } = useDashboard();
+  const { date, setDate, blkOnly, setBlkOnly } = useDashboard();
 
   return (
     <header className="bg-nav text-nav-foreground h-14 flex items-center px-6 gap-6 border-b border-black">
@@ -44,34 +44,6 @@ export function TopNav() {
             >
               {formatMonth(m)}
               {m === date && <Check className="h-3 w-3 text-primary" />}
-            </button>
-          ))}
-        </PopoverContent>
-      </Popover>
-
-      {/* AFP multi-select */}
-      <Popover>
-        <PopoverTrigger className="flex items-center gap-2 text-xs uppercase tracking-wide border border-white/20 px-3 py-1.5 hover:bg-white/10 rounded-sm">
-          <span className="text-white/60">AFPs</span>
-          <span className="font-medium">{afps.length === 0 ? "All" : `${afps.length} selected`}</span>
-          <ChevronDown className="h-3.5 w-3.5" />
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-56 p-1">
-          <button
-            onClick={() => setAfps([])}
-            className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded-sm flex items-center justify-between border-b border-border mb-1"
-          >
-            <span>All AFPs</span>
-            {afps.length === 0 && <Check className="h-3 w-3 text-primary" />}
-          </button>
-          {AFPS.map((a) => (
-            <button
-              key={a}
-              onClick={() => toggleAfp(a)}
-              className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded-sm flex items-center justify-between"
-            >
-              <span>{a}</span>
-              {afps.includes(a) && <Check className="h-3 w-3 text-primary" />}
             </button>
           ))}
         </PopoverContent>
