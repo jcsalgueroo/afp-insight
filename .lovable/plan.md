@@ -1,61 +1,66 @@
-## Summary of changes
+## Flows Intelligence overhaul + new Revenue & Fee Analytics screen
 
-### 1. System Summary — add 2 new 100% stacked area charts
+### 1. Flows Intelligence — chart changes
 
-New row with two side-by-side cards:
-- **ETF AUM Org — Composition by Category** (100% stacked area)
-- **Mutual Fund AUM Org — Composition by Category** (100% stacked area)
+Replace and add charts on `src/components/views/Flows.tsx`. Final layout (top-to-bottom):
 
-Both cards share a single multi-select `AfpFilterPopover` (defaults to All) rendered in a small toolbar above the row so it controls both charts. X-axis spans every available month in the dataset (`MONTHS`), Y-axis is 0–100% with each Category as a stacked band using existing `categoryColor()`. Tooltip shows category $ AUM Org and % of bucket total for the hovered month.
+1. **NNB by Manager — Donut** *(replaces Waterfall)*
+   - Top 5 managers by NNB + "Others" slice.
+   - Toolbar: ETF/MF toggle, YTD/Month toggle, multi-select AFP filter.
+   - Center label = total NNB; tooltip shows $ + % share.
 
-New selector in `src/lib/mock-data.ts`: `getCategoryCompositionSeries(afps, bucket)` → for each month, returns `{ m, [category]: pctShare }` plus a `__raw` map for $ tooltips. Reuses `MASTER_DATA` filtered by bucket and AFPs.
+2. **Cumulative NNB — Stacked Bar** *(new)*
+   - Single bars (one value per Manager or per Category) stacked by the other dimension.
+   - Toolbar: ETF/MF toggle, YTD/Month toggle, sort-by toggle (Manager | Category), AFP multi-filter.
+   - "By Manager": X = Managers, stack segments = Categories. "By Category": X = Categories, stack = Managers.
 
-### 2. System Summary — remove 3 charts (move to Flows)
+3. **Performance vs Flows — Scatter** *(existing, expanded controls)*
+   - Toolbar: YTD/Month toggle (drives both perf & flows axes), AFP multi-filter, Manager multi-filter, Category multi-filter.
+   - Bubble size still = AUM.
 
-Delete from `Scorecard.tsx`:
-- "YTD NNB by Manager" card
-- "YTD NNBF by Manager" card
-- "Flows by Category — ETF vs Mutual Fund" scatter card
+4. **Top 5 / Bottom 5 Securities by Flows — Bar** *(new)*
+   - Single horizontal bar chart, 10 rows: top 5 inflows (positive, green) + bottom 5 outflows (negative, red), sorted by flow.
+   - ETFs labeled by Ticker, Mutual Funds by Fund Name (driven by ETF/MF toggle).
+   - Toolbar: ETF/MF toggle, YTD/Month toggle, AFP multi-filter, Manager multi-filter.
 
-Drop now-unused local state (`nnbBucket`, `nnbAfps`, `nnbfBucket`, `nnbfAfps`, `flowPeriod`, `flowAfps`) and related `useMemo`s.
+5. **Monthly Flows by Bucket — Stacked Bar** *(new)*
+   - X = all available months (`MONTHS`), stacked $ NNB by ETF / Mutual Fund / Money Market using `BUCKET_COLOR`.
+   - No toggles (AFP filter optional — include AFP multi-filter for consistency).
 
-### 3. Flows screen → renamed "Flows Intelligence", gains the 3 moved charts
+6. **Keep**: YTD NNB by Manager (area), YTD NNBF by Manager (area), Flows by Category scatter.
 
-- Sidebar label `src/components/shell/Sidebar.tsx`: "Flows & Fees" → "Flows Intelligence".
-- Route head title in `src/routes/flows.tsx`: update `<title>` to "Flows Intelligence — AFP Portfolio Intelligence".
-- `src/components/views/Flows.tsx` heading text → "Flows Intelligence".
-- **Keep** existing charts: NNB Waterfall, Performance vs Flows, AUM vs Avg Fee.
-- **Append** the 3 moved charts (YTD NNB by Manager, YTD NNBF by Manager, Flows by Category) at the bottom, with their existing local toggles/filters preserved 1:1. Reuse `CardShell` pattern from Scorecard (or copy the small helper into Flows).
+7. **Remove**: NNB Waterfall, AUM vs Avg Fee (moves to new screen).
 
-### 4. AFP Deep Dive — Positions table sort
+### 2. New screen: Revenue & Fee Analytics
 
-Confirmed already correct (categories sorted by total AUM desc, items within a category sorted by AUM desc). No code change.
+- New route `src/routes/revenue.tsx` with head meta.
+- New view `src/components/views/RevenueFeeAnalytics.tsx`.
+- Sidebar entry under/after "Flows Intelligence" labeled **Revenue & Fee Analytics**.
+- Initial content: the **AUM vs Avg Fee by Manager** card moved verbatim from Flows.
 
-## Technical notes
+### 3. Data selectors (`src/lib/mock-data.ts`)
 
-- New selector signature:
-  ```ts
-  getCategoryCompositionSeries(afps: AFP[], bucket: Bucket):
-    Array<{ m: string; [cat: string]: number }>
-  ```
-  Values are 0–1 percentages; tooltip computes $ from a parallel map or the function returns `{ pct, raw }` per row — implement as `{ m, total, ...catPct, __raw: Record<Category,number> }` to keep recharts area `dataKey` straightforward.
+Add small helpers (all pure, derived from `MASTER_DATA`):
 
-- Excludes Money Market only inside the ETF/MF series naturally because `bucket` filter already excludes other buckets. Categories with 0 AUM in a month are still emitted (value 0) so the stack stays continuous.
+- `getNnbDonut(afps, bucket, period: "Month"|"YTD")` → `[{ Manager, NNB }]` top5 + Others.
+- `getCumulativeNnbStacked(afps, bucket, period, sortBy: "Manager"|"Category")` → `{ rows: [{key, ...stackKeys}], stackKeys: string[] }`.
+- `getTopBottomSecurities(afps, managers, bucket, period)` → `[{ label, NNB, isTop }]` (5 highest + 5 lowest by NNB; label = ticker for ETF, fund name for MF).
+- `getMonthlyBucketFlows(afps)` → `[{ m, ETF, "Mutual Fund", "Money Market" }]` for all `MONTHS`.
+- Extend `getScatter` (or add `getScatterFiltered`) to accept `{managers, categories, period}` so Performance vs Flows can filter & switch YTD/Month.
 
-- Recharts setup: `<AreaChart stackOffset="expand">` gives the 100% effect automatically when each series uses `stackId="1"` and raw $ values, but to keep tooltips showing real $ we'll feed % directly and put $ in `__raw` for the formatter. Y-axis `tickFormatter={(v)=>`${(v*100).toFixed(0)}%`}`, domain `[0,1]`.
+Mock-data already exposes `MASTER_DATA` rows with monthly NNB / NNB_YTD-style fields; helpers reuse `bucketOf`, `brandOf`, `tickerOf`.
 
-- Shared filter for the two new charts uses local `useState<AFP[]>([])` in `Scorecard`, passed into both `getCategoryCompositionSeries` calls.
+### 4. Files touched
 
-## Files touched
+- `src/lib/mock-data.ts` — new selectors above.
+- `src/components/views/Flows.tsx` — restructure per layout list.
+- `src/components/views/RevenueFeeAnalytics.tsx` — new file.
+- `src/routes/revenue.tsx` — new route.
+- `src/components/shell/Sidebar.tsx` — add nav entry.
+- `src/routes/flows.tsx` — title unchanged.
 
-- `src/lib/mock-data.ts` — add `getCategoryCompositionSeries`.
-- `src/components/views/Scorecard.tsx` — remove 3 charts + their state; add 2 new area-chart cards with shared AFP filter.
-- `src/components/views/Flows.tsx` — rename heading, append 3 moved charts (with their local state & toggles).
-- `src/components/shell/Sidebar.tsx` — rename nav label.
-- `src/routes/flows.tsx` — update head title/description.
+### Out of scope
 
-## Out of scope
-
-- No backend or data-model changes.
-- No design-token changes.
-- AFP Deep Dive Positions table — verified, no edit needed.
+- No backend / schema changes.
+- No new design tokens; reuse `managerColor`, `categoryColor`, `BUCKET_COLOR`, `CHART_COLORS`.
+- Existing Scorecard / AFP Deep Dive / Securities screens untouched.
