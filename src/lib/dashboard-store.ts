@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { MONTHS } from "./mock-data";
 
 interface DashboardState {
   date: string;
@@ -9,7 +8,7 @@ interface DashboardState {
 }
 
 export const useDashboard = create<DashboardState>((set) => ({
-  date: MONTHS[MONTHS.length - 1],
+  date: "",
   blkOnly: false,
   setDate: (d) => set({ date: d }),
   setBlkOnly: (b) => set({ blkOnly: b }),

@@ -24,6 +24,7 @@ const BUCKET_TOGGLE = [
   { value: "All" as const, label: "All" },
   { value: "ETF" as const, label: "ETF" },
   { value: "Mutual Fund" as const, label: "MF" },
+  { value: "Money Market" as const, label: "MM" },
 ] as const;
 
 const GROUP_TOGGLE = [
