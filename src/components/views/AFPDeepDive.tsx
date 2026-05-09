@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import {
   Treemap,
   ResponsiveContainer,
@@ -443,8 +443,8 @@ export function AFPDeepDive() {
             </thead>
             <tbody>
               {filteredPositions.map((g) => (
-                <>
-                  <tr key={`h-${g.category}`} className="bg-muted/40 border-t border-border">
+                <Fragment key={g.category}>
+                  <tr className="bg-muted/40 border-t border-border">
                     <td colSpan={6} className="px-5 py-1.5 text-[11px] uppercase tracking-wider font-semibold text-foreground">
                       {g.category}
                       <span className="ml-2 text-muted-foreground font-normal normal-case">
@@ -481,7 +481,7 @@ export function AFPDeepDive() {
                       </td>
                     </tr>
                   ))}
-                </>
+                </Fragment>
               ))}
               {filteredPositions.length === 0 && (
                 <tr>
