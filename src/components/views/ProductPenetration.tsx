@@ -91,7 +91,7 @@ export function ProductPenetration() {
   );
 
   return (
-    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+    <div className="p-3 sm:p-6 space-y-6 max-w-[1400px] mx-auto">
       <div>
         <h1 className="text-xl font-semibold">Product Penetration</h1>
         <p className="text-sm text-muted-foreground mt-1">

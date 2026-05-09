@@ -11,17 +11,17 @@ const items = [
   { to: "/securities", label: "Security Detail", icon: Table2 },
 ] as const;
 
-export function Sidebar() {
+export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   return (
-    <aside className="w-56 shrink-0 bg-surface-alt border-r border-border min-h-[calc(100vh-3.5rem)]">
-      <nav className="py-4">
+    <nav className="py-4">
         {items.map((it) => {
           const active = path === it.to;
           return (
             <Link
               key={it.to}
               to={it.to}
+              onClick={() => onNavigate?.()}
               className={cn(
                 "flex items-center gap-3 px-5 py-2.5 text-sm border-l-2 transition-colors",
                 active
@@ -34,10 +34,17 @@ export function Sidebar() {
             </Link>
           );
         })}
-      </nav>
       <div className="px-5 mt-8 text-[10px] uppercase tracking-wider text-muted-foreground">
         Institutional Distribution
       </div>
+    </nav>
+  );
+}
+
+export function Sidebar() {
+  return (
+    <aside className="hidden md:block w-56 shrink-0 bg-surface-alt border-r border-border min-h-[calc(100vh-3.5rem)]">
+      <SidebarNav />
     </aside>
   );
 }

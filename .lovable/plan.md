@@ -1,89 +1,42 @@
-## Replace mock data with live Google Sheets CSVs
+# Password Gate + Mobile Responsiveness
 
-Wire the dashboard to two live Google Sheets CSV endpoints (MasterData + DisplacementMapping), parse with PapaParse, store in a Zustand global store, and feed every existing chart/table through hooks. UI/visuals stay identical except for two new toggles (Money Market bucket option, Month/YTD performance toggle).
+## 1. Password gate
 
-### 1. Dependencies
-- `bun add papaparse` and `bun add -d @types/papaparse`.
+- New file `src/components/shell/PasswordGate.tsx`:
+  - Checks `sessionStorage.getItem("afp-unlocked") === "1"` on mount.
+  - If not unlocked, renders a centered full-screen card with the AFP logo/title, a single password input, "Unlock" button, and an inline error on wrong password.
+  - On correct password (`BismarckInColombia!`), sets the sessionStorage flag and renders children. Re-prompts on every new tab/window.
+- Wrap the app in `src/routes/__root.tsx` so the gate sits outside `TopNav`/`Sidebar`/`DataGate` (no chrome visible until unlocked, and no live data fetched).
+- Hardcoded client-side per your choice — note this is soft gating only (password is visible in the JS bundle).
 
-### 2. New files
+## 2. Responsive shell (TopNav + Sidebar)
 
-**`src/lib/data-sources.ts`** — CSV URL constants + `fetchCsv<T>(url, { numericFields })` helper using `Papa.parse` with `header: true, skipEmptyLines: true`. Numeric coercion is explicit (per field list) rather than `dynamicTyping`, so blanks become `0`/`null` predictably.
+- Replace the fixed `w-56` sidebar with a responsive pattern:
+  - **≥ md (768px+)**: current persistent sidebar, unchanged.
+  - **< md**: sidebar hidden; a hamburger button in `TopNav` opens it as a slide-in drawer using the existing `Sheet` component. Tapping a nav item closes the drawer.
+- `TopNav` adjustments for narrow widths:
+  - Show hamburger on the left (mobile only).
+  - Shorten the brand label to "AFP" under ~480px; keep full label on larger screens.
+  - "As of" label hidden on mobile (keep the month value + chevron).
+  - "BlackRock Only" label shortened to "BLK Only" on mobile; switch stays.
+  - Reduce horizontal padding (`px-3 sm:px-6`) and gap (`gap-3 sm:gap-6`).
 
-**`src/lib/normalize.ts`** — Pure mappers from raw CSV row → existing typed rows.
+## 3. Responsive content
 
-`MasterRow` mapping (per confirmed walkthrough):
-| UI field | Live column | Transform |
-|---|---|---|
-| `Date` | `fecha_corte` | normalize to `YYYY-MM` |
-| `AFP` | `standardized_afp` | string |
-| `Portfolio_Type` | `standardized_portfolio` | string |
-| `Category` | `category` | string |
-| `Asset_Type` | `type` | `'ETF' \| 'Mutual Fund' \| 'Money Market'` |
-| `Manager` | `manager` | merge `iShares` → `BlackRock` |
-| `Ticker` | `ticker` | string (ETFs only — populated for ETFs, blank otherwise) |
-| `Name` | `name` | string (security name for **all** asset types) |
-| `ISIN` | — | **ignored** (not used by UI) |
-| `AUM_USD` | `aum_org` | number |
-| `RRR_USD` | `rrr_org` | number |
-| `NNB_Month_USD` | `month_nnb` | number |
-| `NNB_YTD_USD` | `ytd_nnb` | number |
-| `NNBF_Month_USD` | `month_nnbf` | number (annualized fee impact, month) |
-| `NNBF_YTD_USD` | `ytd_nnbf` | number (annualized fee impact, YTD) |
-| `Perf_Month` | `month_performance_usd` | × 100 |
-| `Perf_YTD` | `ytd_performance_usd` (fallback `month_performance_usd` if absent) | × 100 |
-| `Fee_bps` | `fee` (decimal) | × 10000 |
+- **Page padding**: every view container switches from fixed padding to `p-3 sm:p-6` and removes any `min-w` that forces horizontal page scroll.
+- **KPI / chart grids** in `Scorecard`, `AFPDeepDive`, `Flows`, `RevenueFeeAnalytics`, `ProductPenetration`: change `grid-cols-2`/`grid-cols-3`/`grid-cols-4` to `grid-cols-1 sm:grid-cols-2 lg:grid-cols-{n}` so cards stack on phones.
+- **Filter rows** (AFP filter, segmented toggles, multi-selects): wrap with `flex flex-wrap gap-2` so controls reflow instead of overflowing.
+- **Tables** (Securities, Punching-Below, AFP breakdowns): wrap each `<Table>` in `<div className="w-full overflow-x-auto">` and add `min-w-[640px]` on the inner table so columns keep their width but the page itself doesn't horizontally scroll.
+- **Charts**: ensure each Recharts wrapper uses `ResponsiveContainer` with `width="100%"` and a fixed height — verify and fix any chart still using fixed pixel widths.
+- **Segmented toggles / popover triggers**: allow `text-xs` and `whitespace-nowrap` so labels like "Money Market" don't break layout.
 
-**Ticker vs Name display rule** (consistent across Securities table, Punching-Below table, scatter tooltips, etc.):
-- `Asset_Type === 'ETF'` → primary label = `Ticker`, secondary line = `Name`.
-- `Asset_Type === 'Mutual Fund' | 'Money Market'` → primary label = `Name`, no ticker line.
-- Securities table: replace the current `ISIN` column with a `Ticker` column; keep `Name` column. ISIN-based row keys swap to a synthesized key (`AFP|Portfolio|Date|Ticker||Name`).
+## 4. Out of scope
 
-`DisplacementRow` mapping: keep current shape; `AFP` from `held_by_afps` (comma-split → one row per AFP), `Fee_Advantage_bps`, `Perf_Advantage_pct` ×100, `BLK_*` from `blk_alternative_*` columns (including `blk_alternative_ticker` / `blk_alternative_name` displayed by the same Ticker-vs-Name rule).
+- No backend, no auth provider, no route changes, no chart redesigns, no data-layer changes.
+- Desktop layout stays visually identical at ≥ md.
 
-Ignored MasterData columns (per user): `aun`, `rrr`, `patrimonio`, `precio`, `total_unidades`, `fx_rate`, `moneda`, raw `afp`, raw `portfolio`/`portfolio_type`, base-currency perf, `isin`/`identifier`.
+## Technical notes
 
-**`src/lib/data-store.ts`** — Zustand store:
-```
-{ master, displacement,
-  afps, portfolioTypes, categories, managers, months, // derived
-  status: 'idle'|'loading'|'ready'|'error',
-  error: string | null,
-  load() }
-```
-On `load()`, fetch both URLs in parallel, normalize, derive distinct filter lists, set `status`. Hooks: `useMasterData()`, `useDisplacementData()`, `useFilterOptions()`, `useDataStatus()`.
-
-**`src/components/shell/DataGate.tsx`** — Wraps `<Outlet />` in `__root.tsx`. Calls `load()` on mount; renders skeleton during loading, error card with retry on failure, children when ready.
-
-### 3. Edits to `src/lib/mock-data.ts`
-- Loosen `AFP`, `PortfolioType`, `Category`, `Manager` to `string` aliases (preserve type names so imports keep compiling).
-- Extend `MasterRow` with the new NNB / NNBF / perf fields and make `Ticker` optional (ETF-only).
-- Remove `generateMaster()` / `generateDisplacement()` module-load calls and the exported `MASTER_DATA` / `DISPLACEMENT_DATA` constants. Replace `MONTHS`, `AFPS`, `PORTFOLIO_TYPES`, `CATEGORIES`, `MANAGERS` exports with re-exports from the store (or remove and update consumers to use `useFilterOptions()`).
-- Convert every selector (`getManagerAumFee`, `getCategoryFlows`, `getPenetrationHeatmap`, `getBelowWeightSecurities`, etc.) to take `(master: MasterRow[], …filters)` as first arg. Each view will pass `useMasterData()` in.
-
-### 4. New UI toggles
-- **Bucket toggle**: `All / ETF / MF / MM` everywhere it currently shows `All / ETF / MF`. Add `'Money Market'` to `Bucket` union; extend `bucketOf()`.
-- **NNB scope toggle** (Month / YTD) on Flows, Securities scatter, Revenue scatter — drives whether selectors read `NNB_Month_USD` or `NNB_YTD_USD`.
-- **Perf scope toggle** (Month / YTD) on Performance scatter and tables that show `YTD Perf` — drives `Perf_Month` vs `Perf_YTD`. Column header label updates accordingly.
-- Punching-Below table: keep current "YTD NNB" column but source from `NNB_YTD_USD`; add adjacent "YTD NNBF" column showing annualized revenue impact.
-
-### 5. Component updates
-Every view importing `MASTER_DATA` / constants from `mock-data.ts` switches to `useMasterData()` + `useFilterOptions()`:
-- `Scorecard`, `Flows`, `Securities`, `RevenueFeeAnalytics`, `AFPDeepDive`, `ProductPenetration`.
-- Securities table: drop `ISIN` column, add `Ticker` column (left of `Name`); MFs/MMs show blank ticker.
-- Filter popovers (`AfpFilterPopover`, etc.) read options from `useFilterOptions()`.
-- `dashboard-store.ts` `date` initializer becomes `null`; populated to latest month via store subscription once `status === 'ready'`.
-
-### 6. Loading & error UX
-- Skeleton: top KPI cards greyed out; full-page spinner with text "Loading live AFP data…".
-- Error: red card with message + Retry button calling `load()` again.
-
-### 7. Out of scope
-- No backend, no caching layer, no auth.
-- No chart redesigns, no new screens, no routing changes.
-- CSVs fetched directly from `docs.google.com` (CORS-safe). PapaParse runs in the browser.
-- Base-currency performance, FX, patrimonio, precio, ISIN remain ignored.
-
-### Open assumptions (call out if wrong)
-- Live CSVs include the columns named above with those exact headers (especially `category`, `ticker`, `name`, `ytd_performance_usd`, `month_nnbf`, `ytd_nnbf`, `fee`).
-- `fecha_corte` parses to a YYYY-MM month bucket (one row per security per month).
-- DisplacementMapping schema unchanged from previous round.
+- Sidebar drawer: reuse `src/components/shell/Sidebar.tsx` content inside a `Sheet` rendered from `TopNav`; expose an `onNavigate` callback so menu clicks close the sheet.
+- `PasswordGate` short-circuits before `DataGate`, so CSV fetches don't run for locked visitors.
+- Mobile breakpoint: Tailwind `md` (768px). The `sm` breakpoint (640px) is used for two-column KPI grids on large phones / small tablets.
