@@ -98,7 +98,7 @@ export function Securities() {
   });
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-3 sm:p-6 space-y-4">
       <div className="flex items-end justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Security-Level Detail</h1>

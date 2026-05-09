@@ -141,7 +141,7 @@ export function Scorecard() {
   const compCats = CATEGORIES.filter((c) => c !== "Money Market");
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">System Summary</h1>
         <p className="text-sm text-muted-foreground">

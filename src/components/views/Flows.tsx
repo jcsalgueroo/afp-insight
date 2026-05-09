@@ -186,7 +186,7 @@ export function Flows() {
       : managerColor(k as Manager);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Flows Intelligence</h1>
         <p className="text-sm text-muted-foreground">Where money is moving and how it's priced.</p>

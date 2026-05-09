@@ -550,7 +550,7 @@ function CategoryFeeBubbleCard() {
 
 export function RevenueFeeAnalytics() {
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Revenue &amp; Fees Analytics</h1>
         <p className="text-sm text-muted-foreground">

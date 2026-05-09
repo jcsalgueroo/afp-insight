@@ -229,7 +229,7 @@ export function AFPDeepDive() {
   void blkOnly;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">AFP Deep Dive</h1>
