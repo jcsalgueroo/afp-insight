@@ -524,3 +524,29 @@ export function getCategoryWeightBubbles(f: Filters, afp: AFP) {
     return { category: cat, idx, aggWeight, afpWeight, sizeShare };
   });
 }
+
+// ---------- Category flow bubbles (ETF NNB vs MF NNB) ----------
+
+export function getCategoryFlowBubbles(
+  f: Filters,
+  afps: AFP[],
+  period: "Month" | "YTD",
+) {
+  const monthList = period === "Month" ? [f.date] : monthsYTD(f.date);
+  const rows = MASTER_DATA.filter(
+    (r) => monthList.includes(r.Date) && (afps.length === 0 || afps.includes(r.AFP)),
+  );
+  return CATEGORIES.filter((c) => c !== "Money Market").map((cat) => {
+    const inCat = rows.filter((r) => r.Category === cat);
+    const etfRows = inCat.filter((r) => bucketOf(r) === "ETF");
+    const mfRows = inCat.filter((r) => bucketOf(r) === "Mutual Fund");
+    const etfNnb = sumBy(etfRows, (r) => r.NNB_USD);
+    const mfNnb = sumBy(mfRows, (r) => r.NNB_USD);
+    const iSharesEtfNnb = sumBy(
+      etfRows.filter((r) => brandOf(r) === "iShares"),
+      (r) => r.NNB_USD,
+    );
+    const iSharesShare = Math.abs(etfNnb) > 1 ? iSharesEtfNnb / etfNnb : null;
+    return { category: cat, etfNnb, mfNnb, iSharesShare };
+  });
+}
