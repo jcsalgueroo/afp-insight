@@ -425,7 +425,7 @@ function RrrByAfpCard() {
 // ---------- Card 5: Category Fee Bubble (system vs selected AFP) ----------
 function CategoryFeeBubbleCard() {
   const { date } = useDashboard();
-  const [bucket, setBucket] = useState<"All" | "ETF" | "Mutual Fund">("All");
+  const [bucket, setBucket] = useState<"All" | "ETF" | "Mutual Fund" | "Money Market">("All");
   const [afp, setAfp] = useState<AFP>(AFPS[0]);
   const data = useMemo(() => getCategoryFeeBubbles(afp, bucket, date), [afp, bucket, date]);
 
