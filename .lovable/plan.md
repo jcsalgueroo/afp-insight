@@ -1,59 +1,46 @@
-## Revenue & Fees Analytics — full screen build-out
+## Product Penetration — new screen
 
-Rename the existing screen to **Revenue & Fees Analytics** and replace its single chart with the five new charts below. Sidebar label updated to match.
+Add a fifth dashboard screen showing BlackRock/iShares' market share across each (Category × AFP) cell, plus a follow-up table of weak cells.
 
-### Layout (top → bottom)
+### Sidebar & route
+- `src/components/shell/Sidebar.tsx` — add entry "Product Penetration" (icon: `Crosshair` or `Target`), route `/penetration`.
+- `src/routes/penetration.tsx` — new route file.
+- `src/components/views/ProductPenetration.tsx` — new view.
 
-1. **Top Managers — AUM Org & Weighted Avg Fee** (Composed: Bars + Line)
-   - Bars: AUM Org for top 10 Managers by size + "Others" bucket.
-   - Line: weighted avg fee (bps) per bar = Σ(Fee_bps · AUM) / Σ(AUM).
-   - Toolbar: ETF / MF toggle.
-   - Custom hover card per bar: Manager · Total AUM Org · Total RRR · Weighted Avg Fee (bps).
+### Section 1 — BlackRock Share Heatmap
+- **Rows**: Categories, sorted desc by aggregated AUM Org across all selected AFPs/Portfolio Types/bucket.
+- **Columns**: AFPs (all six, fixed left→right).
+- **Cell value**: `BLK_AUM / Total_AUM` for that (Category, AFP) slice → 0–100%.
+- **Color**: white (0%) → green (100%) linear ramp using design tokens (reuse `categoryColor`/primary green).
+- **Toolbar**:
+  - ETF / Mutual Fund / All segmented toggle (`SegmentedToggle`).
+  - Portfolio Type multi-select (`MultiSelectPopover`, options A–E, default = all).
+- **Hover card** (per cell): top-3 managers in that (Category, AFP) cell with name + % share, plus header showing Category, AFP, BLK share %.
 
-2. **Fee Heatmap — Category × Top 5 Managers**
-   - Rows = Categories, Columns = top 5 Managers by AUM Org (system-wide).
-   - Cell value = weighted avg fee (bps) for that Category × Manager slice.
-   - Color: relative scale (min→max present in matrix), neutral→accent ramp from design tokens.
-   - Tooltip shows Manager, Category, weighted fee, AUM.
-
-3. **Fee vs NNB — Security Scatter**
-   - X = NNB ($), Y = Fee (bps), one bubble per security, colored by Category.
-   - Toggles: YTD / Month · Fee threshold (All / >20 bps / >40 bps).
-   - Multi-filters: Category, Manager, AFP.
-   - Hover card: compact 2-col table — AFP | AUM Org $ — for that security, sorted desc.
-
-4. **RRR by AFP — Stacked Bar by Category**
-   - X = AFPs, stacks = Categories, value = RRR ($).
-   - Toolbar: Manager multi-filter, ETF / MF toggle.
-
-5. **Category Fee Bubble — System vs Selected AFP**
-   - X = Category (categorical axis), Y = weighted avg fee (bps).
-   - Two bubbles per category:
-     - Grey = system-wide weighted avg fee.
-     - Green = weighted avg fee for the single selected AFP.
-   - Bubble size = category share of total AUM Org (%).
-   - Green shade = iShares/BlackRock market share within that category (lighter→darker).
-   - Toolbar: ETF / MF / All toggle, single-select AFP dropdown.
+### Section 2 — Punching Below our Weight
+- Identifies all (Category, AFP) cells where BLK share < 65% (after applying the heatmap's bucket + portfolio filters).
+- Header includes a **Group By** segmented toggle: `Category → AFP` (default) | `AFP → Category`.
+- Renders as a grouped table (`Table` primitive) with sticky group headers:
+  - Outer group header: Category (or AFP) — shows aggregate AUM Org & avg BLK share %.
+  - Inner group header: AFP (or Category) — shows that cell's BLK share % and AUM.
+  - Rows = every security held in that cell (BlackRock + competitors).
+- **Columns**: Ticker / Name · Manager · AUM Org (USD) · YTD Perf (USD %) · YTD NNB (USD).
+  - "Ticker / Name": ETFs show ticker (derive from ISIN tail), Mutual Funds show full name — reuse the convention from the Securities screen.
+  - Base-currency YTD column omitted for now (per user) — note in column header tooltip.
 
 ### Data layer (`src/lib/mock-data.ts`)
+Add pure selectors derived from `MASTER_DATA`:
+- `getPenetrationHeatmap({ bucket, portfolioTypes })` → `{ categories: Category[]; afps: AFP[]; cells: { blkShare:number; totalAUM:number; topManagers:[{Manager, sharePct}] }[][] }`. Categories pre-sorted by total AUM desc.
+- `getBelowWeightSecurities({ bucket, portfolioTypes, threshold:0.65 })` → flat list `[{ Category, AFP, blkShare, ISIN, Ticker, Name, Manager, Asset_Type, AUM_USD, YTD_Perf, NNB_USD }]` ready for either grouping.
 
-Add pure selectors derived from `MASTER_DATA` (reusing `Fee_bps`, `RRR_USD`, `AUM_USD`, `bucketOf`, `managerColor`, `categoryColor`):
+Bucket filter helpers (`bucketOf`) already exist; reuse.
 
-- `getManagerAumFee({ bucket })` → `[{ Manager, AUM, RRR, Fee_bps }]` top10 + Others.
-- `getFeeHeatmap({ bucket })` → `{ categories, managers, cells: number[][] }` (top 5 managers by AUM).
-- `getSecurityFeeNnb({ period, bucket?, managers, categories, afps, feeMin })` → `[{ id, name, ticker, Category, Manager, NNB, Fee_bps, byAfp:[{AFP,AUM}] }]`.
-- `getRrrByAfpCategory({ bucket, managers })` → `{ rows:[{AFP, ...categoryKeys}], categories }`.
-- `getCategoryFeeBubbles({ bucket, afp })` → `[{ Category, sysFee, afpFee, sharePct, blkSharePct }]`.
-
-### Files touched
-
-- `src/components/views/RevenueFeeAnalytics.tsx` — replace contents with the 5 new chart cards.
-- `src/lib/mock-data.ts` — add selectors above.
-- `src/components/shell/Sidebar.tsx` — relabel entry to "Revenue & Fees Analytics".
-- New small widgets if needed: `FeeHeatmap.tsx` (custom SVG/CSS grid; recharts has no native heatmap). Other charts use existing recharts primitives.
+### Widgets
+- Reuse `SegmentedToggle`, `MultiSelectPopover`, `Card`, `Table`.
+- New small `Heatmap` rendered as CSS grid (no recharts heatmap primitive); hover card via `Popover` or a lightweight absolute-positioned div on `onMouseEnter`.
 
 ### Out of scope
-
-- No backend / schema changes; all data derived from existing `MASTER_DATA`.
-- Other screens (Scorecard, AFP Deep Dive, Flows Intelligence, Securities) untouched.
-- No new design tokens — reuse `managerColor`, `categoryColor`, `BUCKET_COLOR`, `CHART_COLORS` and existing primary/muted tokens.
+- No backend / schema changes.
+- No edits to other screens.
+- No new design tokens — green ramp uses existing primary; whites/borders use existing tokens.
+- Base-currency performance column deferred until real FX data exists.
