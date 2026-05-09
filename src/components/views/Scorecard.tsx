@@ -14,6 +14,8 @@ import {
   Legend,
   ResponsiveContainer,
   CartesianGrid,
+  ReferenceLine,
+  LabelList,
 } from "recharts";
 import { ChevronDown, Check } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -33,6 +35,7 @@ import {
   getAumOrgByBucketSeries,
   getBrandKpis,
   getCategoryWeightBubbles,
+  getCategoryFlowBubbles,
   getKPIs,
   getTopManagersPie,
   getYtdByManagerSeries,
@@ -49,6 +52,11 @@ const BUCKET_TOGGLE = [
 const METRIC_TOGGLE = [
   { value: "AUM_USD" as const, label: "AUM Org" },
   { value: "NNB_USD" as const, label: "Monthly NNB" },
+] as const;
+
+const PERIOD_TOGGLE = [
+  { value: "Month" as const, label: "Month" },
+  { value: "YTD" as const, label: "YTD" },
 ] as const;
 
 function shortMonth(m: string) {
@@ -128,6 +136,9 @@ export function Scorecard() {
   const [nnbfBucket, setNnbfBucket] = useState<Bucket>("ETF");
   const [nnbfAfps, setNnbfAfps] = useState<AFP[]>([]);
 
+  const [flowPeriod, setFlowPeriod] = useState<"Month" | "YTD">("Month");
+  const [flowAfps, setFlowAfps] = useState<AFP[]>(afps);
+
   const aumSeries = useMemo(
     () => getAumOrgByBucketSeries(aumLocalAfps, aumMetric),
     [aumLocalAfps, aumMetric],
@@ -144,6 +155,21 @@ export function Scorecard() {
   const bubbles = useMemo(
     () => getCategoryWeightBubbles({ ...filters, blkOnly: false }, bubbleAfp),
     [filters, bubbleAfp],
+  );
+  const flowBubbles = useMemo(
+    () => getCategoryFlowBubbles({ ...filters, blkOnly: false }, flowAfps, flowPeriod),
+    [filters, flowAfps, flowPeriod],
+  );
+  const flowChartData = useMemo(
+    () =>
+      flowBubbles.map((b) => ({
+        x: b.etfNnb,
+        y: b.mfNnb,
+        z: b.iSharesShare == null ? 0 : Math.max(0.02, Math.abs(b.iSharesShare)) * 100,
+        cat: b.category,
+        share: b.iSharesShare,
+      })),
+    [flowBubbles],
   );
 
   return (
@@ -389,6 +415,72 @@ export function Scorecard() {
           </div>
         </CardShell>
       </div>
+
+      {/* Flows by Category — ETF vs MF */}
+      <CardShell
+        title="Flows by Category — ETF vs Mutual Fund"
+        subtitle="Bubble size = iShares share of ETF NNB within category"
+        right={
+          <>
+            <SegmentedToggle options={PERIOD_TOGGLE} value={flowPeriod} onChange={setFlowPeriod} />
+            <AfpFilterPopover value={flowAfps} onChange={setFlowAfps} />
+          </>
+        }
+      >
+        <div className="h-96">
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 16, right: 32, left: 16, bottom: 24 }}>
+              <CartesianGrid stroke={CHART_COLORS.grid} />
+              <XAxis
+                type="number"
+                dataKey="x"
+                name="ETF NNB"
+                tickFormatter={(v: number) => formatUSD(v)}
+                stroke="#999"
+                fontSize={11}
+                label={{ value: "ETF Flows (NNB)", position: "insideBottom", offset: -10, fontSize: 11, fill: "#666" }}
+              />
+              <YAxis
+                type="number"
+                dataKey="y"
+                name="MF NNB"
+                tickFormatter={(v: number) => formatUSD(v)}
+                stroke="#999"
+                fontSize={11}
+                width={70}
+                label={{ value: "Mutual Fund Flows (NNB)", angle: -90, position: "insideLeft", fontSize: 11, fill: "#666" }}
+              />
+              <ZAxis type="number" dataKey="z" range={[80, 900]} />
+              <ReferenceLine x={0} stroke="#999" />
+              <ReferenceLine y={0} stroke="#999" />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                cursor={{ strokeDasharray: "3 3" }}
+                formatter={(v: number, n: string, p: { payload?: { share: number | null } }) => {
+                  if (n === "ETF NNB") return [formatUSD(v), "ETF NNB"];
+                  if (n === "MF NNB") return [formatUSD(v), "MF NNB"];
+                  if (n === "z") {
+                    const s = p?.payload?.share;
+                    return [s == null ? "n/a" : `${(s * 100).toFixed(1)}%`, "iShares share of ETF NNB"];
+                  }
+                  return [v, n];
+                }}
+                labelFormatter={(_, items) => (items?.[0]?.payload as { cat?: string })?.cat ?? ""}
+              />
+              <Scatter
+                name="Category"
+                data={flowChartData}
+                fill={CHART_COLORS.blk}
+                fillOpacity={0.7}
+                stroke={CHART_COLORS.blk}
+                isAnimationActive={false}
+              >
+                <LabelList dataKey="cat" position="top" style={{ fontSize: 10, fill: "#333" }} />
+              </Scatter>
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
+      </CardShell>
     </div>
   );
 }
