@@ -14,8 +14,6 @@ import {
   Legend,
   ResponsiveContainer,
   CartesianGrid,
-  ReferenceLine,
-  LabelList,
 } from "recharts";
 import { ChevronDown, Check } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -30,15 +28,15 @@ import {
   CATEGORIES,
   CHART_COLORS,
   brandColor,
+  categoryColor,
   formatPct,
   formatUSD,
   getAumOrgByBucketSeries,
   getBrandKpis,
   getCategoryWeightBubbles,
-  getCategoryFlowBubbles,
+  getCategoryCompositionSeries,
   getKPIs,
   getTopManagersPie,
-  getYtdByManagerSeries,
   type AFP,
   type Bucket,
 } from "@/lib/mock-data";
@@ -52,11 +50,6 @@ const BUCKET_TOGGLE = [
 const METRIC_TOGGLE = [
   { value: "AUM_USD" as const, label: "AUM Org" },
   { value: "NNB_USD" as const, label: "Monthly NNB" },
-] as const;
-
-const PERIOD_TOGGLE = [
-  { value: "Month" as const, label: "Month" },
-  { value: "YTD" as const, label: "YTD" },
 ] as const;
 
 function shortMonth(m: string) {
@@ -131,47 +124,20 @@ export function Scorecard() {
   const [pieBucket, setPieBucket] = useState<Bucket>("ETF");
   const [bubbleAfp, setBubbleAfp] = useState<AFP>(AFPS[0]);
 
-  const [nnbBucket, setNnbBucket] = useState<Bucket>("ETF");
-  const [nnbAfps, setNnbAfps] = useState<AFP[]>([]);
-
-  const [nnbfBucket, setNnbfBucket] = useState<Bucket>("ETF");
-  const [nnbfAfps, setNnbfAfps] = useState<AFP[]>([]);
-
-  const [flowPeriod, setFlowPeriod] = useState<"Month" | "YTD">("Month");
-  const [flowAfps, setFlowAfps] = useState<AFP[]>(afps);
+  const [compAfps, setCompAfps] = useState<AFP[]>([]);
 
   const aumSeries = useMemo(
     () => getAumOrgByBucketSeries(aumLocalAfps, aumMetric),
     [aumLocalAfps, aumMetric],
   );
   const pieData = useMemo(() => getTopManagersPie(filters, pieBucket), [filters, pieBucket]);
-  const nnbSeries = useMemo(
-    () => getYtdByManagerSeries({ date, afps: nnbAfps, blkOnly: false }, nnbBucket, "NNB"),
-    [date, nnbAfps, nnbBucket],
-  );
-  const nnbfSeries = useMemo(
-    () => getYtdByManagerSeries({ date, afps: nnbfAfps, blkOnly: false }, nnbfBucket, "NNBF"),
-    [date, nnbfAfps, nnbfBucket],
-  );
   const bubbles = useMemo(
     () => getCategoryWeightBubbles({ ...filters, blkOnly: false }, bubbleAfp),
     [filters, bubbleAfp],
   );
-  const flowBubbles = useMemo(
-    () => getCategoryFlowBubbles({ ...filters, blkOnly: false }, flowAfps, flowPeriod),
-    [filters, flowAfps, flowPeriod],
-  );
-  const flowChartData = useMemo(
-    () =>
-      flowBubbles.map((b) => ({
-        x: b.etfNnb,
-        y: b.mfNnb,
-        z: b.iSharesShare == null ? 0 : Math.max(0.02, Math.abs(b.iSharesShare)) * 100,
-        cat: b.category,
-        share: b.iSharesShare,
-      })),
-    [flowBubbles],
-  );
+  const etfComp = useMemo(() => getCategoryCompositionSeries(compAfps, "ETF"), [compAfps]);
+  const mfComp = useMemo(() => getCategoryCompositionSeries(compAfps, "Mutual Fund"), [compAfps]);
+  const compCats = CATEGORIES.filter((c) => c !== "Money Market");
 
   return (
     <div className="p-6 space-y-6">
