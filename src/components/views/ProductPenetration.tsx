@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   PORTFOLIO_TYPES,
-  formatPct,
   formatUSD,
   getBelowWeightSecurities,
   getPenetrationHeatmap,
