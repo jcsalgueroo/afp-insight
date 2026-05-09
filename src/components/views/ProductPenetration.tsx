@@ -81,12 +81,12 @@ export function ProductPenetration() {
   const below = useMemo(
     () =>
       getBelowWeightSecurities({
-        bucket,
+        bucket: "ETF",
         portfolioTypes: ptypes,
         date,
         threshold: 0.65,
       }),
-    [bucket, ptypes, date],
+    [ptypes, date],
   );
 
   return (
@@ -143,7 +143,7 @@ export function ProductPenetration() {
 
       <CardShell
         title="Punching Below our Weight"
-        subtitle={`Cells where BlackRock share is below 65% (${below.length} securities)`}
+        subtitle={`ETFs in cells where BlackRock share is below 65% (${below.length} securities)`}
         right={
           <SegmentedToggle value={groupBy} onChange={setGroupBy} options={GROUP_TOGGLE} />
         }
