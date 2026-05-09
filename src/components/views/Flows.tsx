@@ -84,14 +84,14 @@ function CardShell({
 }) {
   return (
     <div className={cn("bg-card border border-border rounded-md shadow-sm flex flex-col", className)}>
-      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border flex-wrap">
+      <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-4 border-b border-border flex-wrap">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wide">{title}</h2>
           {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
         </div>
         <div className="flex items-center gap-2 flex-wrap">{right}</div>
       </div>
-      <div className="p-5 flex-1">{children}</div>
+      <div className="p-3 sm:p-5 flex-1">{children}</div>
     </div>
   );
 }
