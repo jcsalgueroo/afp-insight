@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -14,23 +14,80 @@ import {
   ComposedChart,
   Line,
   Legend,
+  AreaChart,
+  Area,
+  ReferenceLine,
+  LabelList,
 } from "recharts";
 import {
+  AFPS,
+  brandColor,
   CHART_COLORS,
   formatBps,
   formatUSD,
   getAUMvsFee,
+  getCategoryFlowBubbles,
   getNNBByManager,
   getScatter,
+  getYtdByManagerSeries,
   managerColor,
   MANAGERS,
+  type AFP,
+  type Bucket,
   type Manager,
 } from "@/lib/mock-data";
 import { useDashboard } from "@/lib/dashboard-store";
+import { AfpFilterPopover } from "@/components/widgets/AfpFilterPopover";
+import { SegmentedToggle } from "@/components/widgets/SegmentedToggle";
+import { cn } from "@/lib/utils";
+
+const BUCKET_TOGGLE = [
+  { value: "ETF" as Bucket, label: "ETF" },
+  { value: "Mutual Fund" as Bucket, label: "MF" },
+] as const;
+
+const PERIOD_TOGGLE = [
+  { value: "Month" as const, label: "Month" },
+  { value: "YTD" as const, label: "YTD" },
+] as const;
+
+const tooltipStyle = { fontSize: 12, border: "1px solid #E5E5E5", borderRadius: 4 } as const;
+
+function shortMonth(m: string) {
+  const [y, mo] = m.split("-");
+  return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString("en-US", { month: "short" });
+}
+
+function CardShell({
+  title,
+  subtitle,
+  right,
+  children,
+  className,
+}: {
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("bg-card border border-border rounded-md shadow-sm flex flex-col", className)}>
+      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border flex-wrap">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide">{title}</h2>
+          {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">{right}</div>
+      </div>
+      <div className="p-5 flex-1">{children}</div>
+    </div>
+  );
+}
 
 export function Flows() {
   const { date, blkOnly } = useDashboard();
-  const afps: never[] = [];
+  const afps: AFP[] = [];
   const filters = { date, afps, blkOnly };
 
   // Waterfall: stacked transparent base + delta
@@ -54,10 +111,43 @@ export function Flows() {
     data: scatter.filter((s) => s.Manager === m),
   })).filter((s) => s.data.length > 0);
 
+  // Moved-from-Scorecard state
+  const [nnbBucket, setNnbBucket] = useState<Bucket>("ETF");
+  const [nnbAfps, setNnbAfps] = useState<AFP[]>([]);
+  const [nnbfBucket, setNnbfBucket] = useState<Bucket>("ETF");
+  const [nnbfAfps, setNnbfAfps] = useState<AFP[]>([]);
+  const [flowPeriod, setFlowPeriod] = useState<"Month" | "YTD">("Month");
+  const [flowAfps, setFlowAfps] = useState<AFP[]>([]);
+
+  const nnbSeries = useMemo(
+    () => getYtdByManagerSeries({ date, afps: nnbAfps, blkOnly: false }, nnbBucket, "NNB"),
+    [date, nnbAfps, nnbBucket],
+  );
+  const nnbfSeries = useMemo(
+    () => getYtdByManagerSeries({ date, afps: nnbfAfps, blkOnly: false }, nnbfBucket, "NNBF"),
+    [date, nnbfAfps, nnbfBucket],
+  );
+  const flowBubbles = useMemo(
+    () => getCategoryFlowBubbles({ date, afps: [], blkOnly: false }, flowAfps, flowPeriod),
+    [date, flowAfps, flowPeriod],
+  );
+  const flowChartData = useMemo(
+    () =>
+      flowBubbles.map((b) => ({
+        x: b.etfNnb,
+        y: b.mfNnb,
+        z: b.iSharesShare == null ? 0 : Math.max(0.02, Math.abs(b.iSharesShare)) * 100,
+        cat: b.category,
+        share: b.iSharesShare,
+      })),
+    [flowBubbles],
+  );
+  void AFPS;
+
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Flows & Fee Intelligence</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Flows Intelligence</h1>
         <p className="text-sm text-muted-foreground">Where money is moving and how it's priced.</p>
       </div>
 
