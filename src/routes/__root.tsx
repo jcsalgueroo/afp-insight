@@ -12,6 +12,7 @@ import appCss from "../styles.css?url";
 import { TopNav } from "@/components/shell/TopNav";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { DataGate } from "@/components/shell/DataGate";
+import { PasswordGate } from "@/components/shell/PasswordGate";
 
 function NotFoundComponent() {
   return (
@@ -116,17 +117,19 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen flex flex-col bg-background text-foreground">
-        <TopNav />
-        <div className="flex flex-1">
-          <Sidebar />
-          <main className="flex-1 min-w-0">
-            <DataGate>
-              <Outlet />
-            </DataGate>
-          </main>
+      <PasswordGate>
+        <div className="min-h-screen flex flex-col bg-background text-foreground">
+          <TopNav />
+          <div className="flex flex-1 min-w-0">
+            <Sidebar />
+            <main className="flex-1 min-w-0">
+              <DataGate>
+                <Outlet />
+              </DataGate>
+            </main>
+          </div>
         </div>
-      </div>
+      </PasswordGate>
     </QueryClientProvider>
   );
 }
