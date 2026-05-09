@@ -915,3 +915,180 @@ export function getScatterFiltered(
   }
   return [...map.values()];
 }
+
+// ---------- Revenue & Fees Analytics selectors ----------
+
+/** Top 10 managers by AUM (+ Others) with weighted fee & RRR for the selected bucket/month. */
+export function getManagerAumFee(afps: AFP[], bucket: Bucket, date: string) {
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      r.Date === date &&
+      (afps.length === 0 || afps.includes(r.AFP)) &&
+      bucketOf(r) === bucket,
+  );
+  const by = new Map<Manager, { AUM: number; RRR: number; feeWeight: number }>();
+  for (const r of rows) {
+    const c = by.get(r.Manager) ?? { AUM: 0, RRR: 0, feeWeight: 0 };
+    c.AUM += r.AUM_USD;
+    c.RRR += r.RRR_USD;
+    c.feeWeight += r.Fee_bps * r.AUM_USD;
+    by.set(r.Manager, c);
+  }
+  const all = [...by.entries()]
+    .map(([Manager, v]) => ({
+      Manager: Manager as string,
+      AUM: v.AUM,
+      RRR: v.RRR,
+      Fee_bps: v.AUM ? v.feeWeight / v.AUM : 0,
+    }))
+    .sort((a, b) => b.AUM - a.AUM);
+  const top = all.slice(0, 10);
+  const rest = all.slice(10);
+  if (rest.length) {
+    const aum = rest.reduce((a, b) => a + b.AUM, 0);
+    const rrr = rest.reduce((a, b) => a + b.RRR, 0);
+    const fw = rest.reduce((a, b) => a + b.Fee_bps * b.AUM, 0);
+    top.push({ Manager: "Others", AUM: aum, RRR: rrr, Fee_bps: aum ? fw / aum : 0 });
+  }
+  return top;
+}
+
+/** Fee heatmap: rows = Categories, cols = top 5 Managers. */
+export function getFeeHeatmap(afps: AFP[], bucket: Bucket, date: string) {
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      r.Date === date &&
+      (afps.length === 0 || afps.includes(r.AFP)) &&
+      bucketOf(r) === bucket,
+  );
+  const cats = CATEGORIES.filter((c) =>
+    bucket === "Money Market" ? c === "Money Market" : c !== "Money Market",
+  );
+  const mgrAum = new Map<Manager, number>();
+  for (const r of rows) mgrAum.set(r.Manager, (mgrAum.get(r.Manager) ?? 0) + r.AUM_USD);
+  const managers = [...mgrAum.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([m]) => m);
+  const cells = cats.map((cat) =>
+    managers.map((mgr) => {
+      const sub = rows.filter((r) => r.Category === cat && r.Manager === mgr);
+      const aum = sumBy(sub, (r) => r.AUM_USD);
+      const fw = sumBy(sub, (r) => r.Fee_bps * r.AUM_USD);
+      return { fee: aum ? fw / aum : 0, aum };
+    }),
+  );
+  return { categories: cats as string[], managers: managers as string[], cells };
+}
+
+/** Per-security fee vs NNB scatter with per-AFP AUM breakdown for hover. */
+export function getSecurityFeeNnb(
+  afps: AFP[],
+  managers: Manager[],
+  categories: Category[],
+  period: Period,
+  date: string,
+  feeMinBps: number,
+) {
+  const dates = period === "YTD" ? monthsYTD(date) : [date];
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      dates.includes(r.Date) &&
+      (afps.length === 0 || afps.includes(r.AFP)) &&
+      (managers.length === 0 || managers.includes(r.Manager)) &&
+      (categories.length === 0 || categories.includes(r.Category)),
+  );
+  type Sec = {
+    ISIN: string;
+    Name: string;
+    Ticker: string;
+    Category: Category;
+    Manager: Manager;
+    NNB: number;
+    Fee_bps: number;
+    byAfp: Map<AFP, number>;
+  };
+  const m = new Map<string, Sec>();
+  for (const r of rows) {
+    let s = m.get(r.ISIN);
+    if (!s) {
+      s = {
+        ISIN: r.ISIN,
+        Name: r.Name,
+        Ticker: tickerOf(r.ISIN),
+        Category: r.Category,
+        Manager: r.Manager,
+        NNB: 0,
+        Fee_bps: r.Fee_bps,
+        byAfp: new Map(),
+      };
+      m.set(r.ISIN, s);
+    }
+    s.NNB += r.NNB_USD;
+    if (r.Date === date) s.byAfp.set(r.AFP, (s.byAfp.get(r.AFP) ?? 0) + r.AUM_USD);
+  }
+  return [...m.values()]
+    .filter((s) => s.Fee_bps >= feeMinBps)
+    .map((s) => ({
+      ISIN: s.ISIN,
+      Name: s.Name,
+      Ticker: s.Ticker,
+      Category: s.Category,
+      Manager: s.Manager,
+      NNB: s.NNB,
+      Fee_bps: s.Fee_bps,
+      byAfp: [...s.byAfp.entries()]
+        .map(([AFP, AUM]) => ({ AFP, AUM }))
+        .sort((a, b) => b.AUM - a.AUM),
+    }));
+}
+
+/** RRR by AFP, stacked by Category. */
+export function getRrrByAfpCategory(managers: Manager[], bucket: Bucket, date: string) {
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      r.Date === date &&
+      bucketOf(r) === bucket &&
+      (managers.length === 0 || managers.includes(r.Manager)),
+  );
+  const cats = CATEGORIES.filter((c) =>
+    bucket === "Money Market" ? c === "Money Market" : c !== "Money Market",
+  );
+  const data = AFPS.map((afp) => {
+    const row: Record<string, number | string> = { AFP: afp };
+    for (const c of cats) row[c] = 0;
+    for (const r of rows.filter((r) => r.AFP === afp)) {
+      row[r.Category] = (row[r.Category] as number) + r.RRR_USD;
+    }
+    return row;
+  });
+  return { data, categories: cats as string[] };
+}
+
+/** Category fee bubbles: system vs selected AFP, with category AUM share & BLK share. */
+export function getCategoryFeeBubbles(afp: AFP, bucket: Bucket | "All", date: string) {
+  const all = MASTER_DATA.filter(
+    (r) => r.Date === date && (bucket === "All" || bucketOf(r) === bucket),
+  );
+  const totalAll = sumBy(all, (r) => r.AUM_USD) || 1;
+  const cats = CATEGORIES.filter((c) =>
+    bucket === "Money Market" ? c === "Money Market" : true,
+  );
+  return cats.map((cat) => {
+    const inCat = all.filter((r) => r.Category === cat);
+    const sysAum = sumBy(inCat, (r) => r.AUM_USD);
+    const sysFw = sumBy(inCat, (r) => r.Fee_bps * r.AUM_USD);
+    const sysFee = sysAum ? sysFw / sysAum : 0;
+    const afpRows = inCat.filter((r) => r.AFP === afp);
+    const afpAum = sumBy(afpRows, (r) => r.AUM_USD);
+    const afpFw = sumBy(afpRows, (r) => r.Fee_bps * r.AUM_USD);
+    const afpFee = afpAum ? afpFw / afpAum : 0;
+    const sharePct = (sysAum / totalAll) * 100;
+    const blkAum = sumBy(
+      inCat.filter((r) => r.Manager === "BlackRock"),
+      (r) => r.AUM_USD,
+    );
+    const blkSharePct = sysAum ? (blkAum / sysAum) * 100 : 0;
+    return { Category: cat as string, sysFee, afpFee, sharePct, blkSharePct };
+  });
+}

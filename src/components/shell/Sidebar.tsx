@@ -1,11 +1,12 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, PieChart, TrendingUp, Table2 } from "lucide-react";
+import { LayoutDashboard, PieChart, TrendingUp, Table2, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
   { to: "/", label: "System Summary", icon: LayoutDashboard },
   { to: "/afp", label: "AFP Deep Dive", icon: PieChart },
   { to: "/flows", label: "Flows Intelligence", icon: TrendingUp },
+  { to: "/revenue", label: "Revenue & Fees Analytics", icon: DollarSign },
   { to: "/securities", label: "Security Detail", icon: Table2 },
 ] as const;
 
