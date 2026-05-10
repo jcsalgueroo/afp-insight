@@ -72,6 +72,13 @@
   --color-grid: var(--grid);
   --color-nav: var(--nav);
   --color-nav-foreground: var(--nav-foreground);
+  --color-accent-lime: var(--accent-lime);
+  --color-accent-lime-soft: var(--accent-lime-soft);
+  --color-accent-yellow-green: var(--accent-yellow-green);
+  --color-accent-yellow: var(--accent-yellow);
+  --color-accent-gold: var(--accent-gold);
+  --color-accent-orange: var(--accent-orange);
+  --color-accent-orange-soft: var(--accent-orange-soft);
 }
 
 :root {
@@ -104,6 +111,13 @@
   --positive: #34a853;
   --negative: #d93025;
   --grid: #e5e5e5;
+  --accent-lime: oklch(0.82 0.23 140);
+  --accent-lime-soft: oklch(0.9 0.18 130);
+  --accent-yellow-green: oklch(0.85 0.21 120);
+  --accent-yellow: oklch(0.97 0.21 105);
+  --accent-gold: oklch(0.87 0.17 90);
+  --accent-orange: oklch(0.78 0.18 60);
+  --accent-orange-soft: oklch(0.85 0.13 65);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
