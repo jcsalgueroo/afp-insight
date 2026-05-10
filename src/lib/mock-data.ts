@@ -604,7 +604,28 @@ export function getNnbByManagerStacked(
     row[r.Category] = (row[r.Category] as number) + r.NNB_USD;
     row.total += r.NNB_USD;
   }
-  return [...byMgr.values()].sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+  const data = [...byMgr.values()].sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+  // Collapse small categories into "Others".
+  const totals = new Map<string, number>();
+  for (const c of CATEGORIES) {
+    let t = 0;
+    for (const row of data) t += Math.abs((row[c] as number) ?? 0);
+    totals.set(c, t);
+  }
+  const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const keep = new Set(ranked.slice(0, STACK_TOP_N).map(([k]) => k));
+  const dropped = CATEGORIES.filter((c) => !keep.has(c));
+  if (dropped.length === 0) return { data, categories: CATEGORIES as string[] };
+  for (const row of data) {
+    let others = 0;
+    for (const c of dropped) {
+      others += (row[c] as number) ?? 0;
+      delete (row as Record<string, unknown>)[c];
+    }
+    (row as Record<string, number>)["Others"] = others;
+  }
+  const keptOrdered = CATEGORIES.filter((c) => keep.has(c));
+  return { data, categories: [...keptOrdered, "Others"] };
 }
 
 const CATEGORY_PALETTE = [
