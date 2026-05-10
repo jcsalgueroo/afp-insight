@@ -257,10 +257,29 @@ export const CHART_COLORS = {
   grayPalette: ["#000000", "#4D4D4D", "#7A7A7A", "#999999", "#B8B8B8", "#D4D4D4"],
 };
 
+// Vibrant accent palette used across charts for managers / categories.
+// Built from the brand green plus the requested lime/yellow-green/gold/orange family.
+export const ACCENT_PALETTE = [
+  "#00B140", // brand green
+  "#FFA500", // orange
+  "#FFD700", // gold
+  "#32CD32", // lime green
+  "#9ACD32", // yellow-green
+  "#FF8C00", // dark orange
+  "#1F7A3A", // deep green
+  "#FFB347", // soft orange
+  "#BFEA3A", // soft lime
+  "#E6C200", // mustard
+];
+
+export const STACK_TOP_N = 6;
+
 export function managerColor(m: Manager) {
   if (m === "BlackRock") return CHART_COLORS.blk;
-  const idx = MANAGERS.filter((x) => x !== "BlackRock").indexOf(m);
-  return CHART_COLORS.grayPalette[idx + 1] ?? CHART_COLORS.competitor;
+  if (m === "Others" || m === "Other") return CHART_COLORS.competitor;
+  const others = MANAGERS.filter((x) => x !== "BlackRock");
+  const idx = others.indexOf(m);
+  return ACCENT_PALETTE[(idx >= 0 ? idx + 1 : 0) % ACCENT_PALETTE.length];
 }
 
 // ---------- Brand & bucket helpers ----------
