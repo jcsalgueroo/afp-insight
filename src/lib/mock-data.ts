@@ -608,19 +608,20 @@ export function getNnbByManagerStacked(
 }
 
 const CATEGORY_PALETTE = [
-  "#00B140",
-  "#1F7A3A",
-  "#000000",
-  "#4D4D4D",
-  "#7A7A7A",
-  "#999999",
-  "#B8B8B8",
-  "#D4D4D4",
-  "#005f24",
-  "#3a8a5a",
+  "#00B140", // brand green
+  "#32CD32", // lime
+  "#9ACD32", // yellow-green
+  "#FFD700", // gold
+  "#FFA500", // orange
+  "#1F7A3A", // deep green
+  "#FF8C00", // dark orange
+  "#BFEA3A", // soft lime
+  "#E6C200", // mustard
+  "#FFB347", // soft orange
 ];
 export function categoryColor(c: Category) {
-  if (c === "Money Market") return "#B8B8B8";
+  if (c === "Money Market") return "#FFD700";
+  if (c === "Others" || c === "Other") return CHART_COLORS.competitor;
   const idx = CATEGORIES.indexOf(c);
   return CATEGORY_PALETTE[(idx >= 0 ? idx : 0) % CATEGORY_PALETTE.length];
 }
