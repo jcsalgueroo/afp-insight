@@ -828,7 +828,27 @@ export function getCumulativeNnbStacked(
     }
     return row;
   });
-  return { data, stackKeys };
+  // Collapse small stack keys into "Others" for readability.
+  const totals = new Map<string, number>();
+  for (const k of stackKeys) {
+    let t = 0;
+    for (const row of data) t += Math.abs((row[k] as number) ?? 0);
+    totals.set(k, t);
+  }
+  const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const keep = new Set(ranked.slice(0, STACK_TOP_N).map(([k]) => k));
+  const dropped = stackKeys.filter((k) => !keep.has(k));
+  if (dropped.length === 0) return { data, stackKeys };
+  for (const row of data) {
+    let others = 0;
+    for (const k of dropped) {
+      others += (row[k] as number) ?? 0;
+      delete (row as Record<string, unknown>)[k];
+    }
+    row["Others"] = others;
+  }
+  const keptOrdered = stackKeys.filter((k) => keep.has(k));
+  return { data, stackKeys: [...keptOrdered, "Others"] };
 }
 
 /** Top 5 + Bottom 5 securities by flows. */
