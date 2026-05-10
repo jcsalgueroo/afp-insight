@@ -1082,7 +1082,27 @@ export function getRrrByAfpCategory(managers: Manager[], bucket: Bucket, date: s
     }
     return row;
   });
-  return { data, categories: cats as string[] };
+  // Collapse small categories into "Others" for readability.
+  const totals = new Map<string, number>();
+  for (const c of cats) {
+    let t = 0;
+    for (const row of data) t += Math.abs((row[c] as number) ?? 0);
+    totals.set(c, t);
+  }
+  const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const keep = new Set(ranked.slice(0, STACK_TOP_N).map(([k]) => k));
+  const dropped = (cats as string[]).filter((c) => !keep.has(c));
+  if (dropped.length === 0) return { data, categories: cats as string[] };
+  for (const row of data) {
+    let others = 0;
+    for (const c of dropped) {
+      others += (row[c] as number) ?? 0;
+      delete (row as Record<string, unknown>)[c];
+    }
+    row["Others"] = others;
+  }
+  const keptOrdered = (cats as string[]).filter((c) => keep.has(c));
+  return { data, categories: [...keptOrdered, "Others"] };
 }
 
 /** Category fee bubbles: system vs selected AFP, with category AUM share & BLK share. */
