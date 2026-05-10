@@ -105,16 +105,19 @@ export function getKPIs(f: Filters) {
   );
 
   const aum = sumBy(cur, (r) => r.AUM_USD);
-  const nnb = sumBy(cur, (r) => r.NNB_USD);
+  const nnb = sumBy(cur, (r) => r.NNB_YTD_USD);
   const rrr = sumBy(cur, (r) => r.RRR_USD);
-  const nnbf = nnb * 0.0035; // proxy
+  const nnbf = sumBy(cur, (r) => r.NNBF_YTD_USD);
 
   const aumPrev = sumBy(prev, (r) => r.AUM_USD) || 1;
-  const nnbPrev = sumBy(prev, (r) => r.NNB_USD) || 1;
+  const nnbPrev = sumBy(prev, (r) => r.NNB_YTD_USD) || 1;
   const rrrPrev = sumBy(prev, (r) => r.RRR_USD) || 1;
+  const nnbfPrev = sumBy(prev, (r) => r.NNBF_YTD_USD) || 1;
 
   // 4-month sparkline
-  const trend = (metric: "AUM_USD" | "NNB_USD" | "RRR_USD") => {
+  const trend = (
+    metric: "AUM_USD" | "NNB_USD" | "RRR_USD" | "NNB_YTD_USD" | "NNBF_YTD_USD",
+  ) => {
     const startIdx = Math.max(0, MONTHS.indexOf(f.date) - 3);
     return MONTHS.slice(startIdx, MONTHS.indexOf(f.date) + 1).map((m) => {
       const rows = applyFilters(MASTER_DATA, { ...f, date: m }).filter((r) => r.Manager === "BlackRock");
@@ -128,11 +131,12 @@ export function getKPIs(f: Filters) {
     rrr,
     nnbf,
     aumDelta: (aum - sumBy(prev, (r) => r.AUM_USD)) / aumPrev,
-    nnbDelta: (nnb - sumBy(prev, (r) => r.NNB_USD)) / Math.abs(nnbPrev),
+    nnbDelta: (nnb - sumBy(prev, (r) => r.NNB_YTD_USD)) / Math.abs(nnbPrev),
     rrrDelta: (rrr - sumBy(prev, (r) => r.RRR_USD)) / Math.abs(rrrPrev),
-    nnbfDelta: (nnbf - nnbPrev * 0.0035) / Math.abs(nnbPrev * 0.0035),
+    nnbfDelta: (nnbf - sumBy(prev, (r) => r.NNBF_YTD_USD)) / Math.abs(nnbfPrev),
     trendAUM: trend("AUM_USD"),
-    trendNNB: trend("NNB_USD"),
+    trendNNB: trend("NNB_YTD_USD"),
+    trendNNBF: trend("NNBF_YTD_USD"),
     trendRRR: trend("RRR_USD"),
   };
 }
