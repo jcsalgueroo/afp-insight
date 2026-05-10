@@ -437,9 +437,13 @@ export function getYtdByManagerSeries(
 
 // ---------- Category weight bubble data ----------
 
-export function getCategoryWeightBubbles(f: Filters, afp: AFP) {
-  const allRows = rowsAt(f.date, []);
-  const afpRows = rowsAt(f.date, [afp]);
+export function getCategoryWeightBubbles(f: Filters, afp: AFP, bucket?: Bucket) {
+  let allRows = rowsAt(f.date, []);
+  let afpRows = rowsAt(f.date, [afp]);
+  if (bucket) {
+    allRows = allRows.filter((r) => bucketOf(r) === bucket);
+    afpRows = afpRows.filter((r) => bucketOf(r) === bucket);
+  }
   const totalAll = sumBy(allRows, (r) => r.AUM_USD) || 1;
   const totalAfp = sumBy(afpRows, (r) => r.AUM_USD) || 1;
 

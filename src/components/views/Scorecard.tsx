@@ -48,6 +48,11 @@ const BUCKET_TOGGLE = [
   { value: "Money Market" as Bucket, label: "MM" },
 ] as const;
 
+const WEIGHTS_BUCKET_TOGGLE = [
+  { value: "ETF" as Bucket, label: "ETF" },
+  { value: "Mutual Fund" as Bucket, label: "MF" },
+] as const;
+
 const METRIC_TOGGLE = [
   { value: "AUM_USD" as const, label: "AUM Org" },
   { value: "NNB_USD" as const, label: "Monthly NNB" },
@@ -124,6 +129,7 @@ export function Scorecard() {
 
   const [pieBucket, setPieBucket] = useState<Bucket>("ETF");
   const [bubbleAfp, setBubbleAfp] = useState<AFP>(AFPS[0]);
+  const [weightsBucket, setWeightsBucket] = useState<Bucket>("ETF");
 
   const [compAfps, setCompAfps] = useState<AFP[]>([]);
 
@@ -133,8 +139,8 @@ export function Scorecard() {
   );
   const pieData = useMemo(() => getTopManagersPie(filters, pieBucket), [filters, pieBucket]);
   const bubbles = useMemo(
-    () => getCategoryWeightBubbles({ ...filters, blkOnly: false }, bubbleAfp),
-    [filters, bubbleAfp],
+    () => getCategoryWeightBubbles({ ...filters, blkOnly: false }, bubbleAfp, weightsBucket),
+    [filters, bubbleAfp, weightsBucket],
   );
   const etfComp = useMemo(() => getCategoryCompositionSeries(compAfps, "ETF"), [compAfps]);
   const mfComp = useMemo(() => getCategoryCompositionSeries(compAfps, "Mutual Fund"), [compAfps]);
@@ -168,88 +174,17 @@ export function Scorecard() {
         />
       </div>
 
-      {/* AUM Org evolution */}
+      {/* Category Weights — prominent, full width */}
       <CardShell
-        title={aumMetric === "AUM_USD" ? "AUM Org — Evolution by Asset Type" : "Monthly NNB — Evolution by Asset Type"}
-        subtitle="Trailing 12 months, stacked by ETF / Mutual Fund / Money Market"
+        title="Category Weights — AFP vs System"
+        subtitle={`Bubble size = (iShares + BlackRock) share within Category — ${weightsBucket}`}
         right={
           <>
-            <SegmentedToggle options={METRIC_TOGGLE} value={aumMetric} onChange={setAumMetric} />
-            <AfpFilterPopover value={aumLocalAfps} onChange={setAumLocalAfps} />
+            <SegmentedToggle options={WEIGHTS_BUCKET_TOGGLE} value={weightsBucket} onChange={setWeightsBucket} />
+            <AfpSinglePicker value={bubbleAfp} onChange={setBubbleAfp} />
           </>
         }
       >
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={aumSeries} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-              <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
-              <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
-              <YAxis tickFormatter={(v) => formatUSD(v)} stroke="#999" fontSize={11} width={70} />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                formatter={(v: number, n) => [formatUSD(v), n]}
-                labelFormatter={(l) => shortMonth(l as string)}
-              />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {BUCKETS.map((b) => (
-                <Area
-                  key={b}
-                  type="monotone"
-                  dataKey={b}
-                  stackId="1"
-                  stroke={BUCKET_COLOR[b]}
-                  fill={BUCKET_COLOR[b]}
-                  fillOpacity={0.8}
-                  isAnimationActive={false}
-                />
-              ))}
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </CardShell>
-
-      {/* Pie + Bubble row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <CardShell
-          title="Top 5 Managers — Market Share"
-          subtitle="By AUM, remainder grouped as Others"
-          right={<SegmentedToggle options={BUCKET_TOGGLE} value={pieBucket} onChange={setPieBucket} />}
-        >
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  formatter={(v: number, n) => [formatUSD(v), n]}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Pie
-                  data={pieData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={100}
-                  paddingAngle={1}
-                  isAnimationActive={false}
-                  label={({ percent }) => `${((percent ?? 0) * 100).toFixed(0)}%`}
-                  labelLine={false}
-                >
-                  {pieData.map((d) => (
-                    <Cell key={d.name} fill={brandColor(d.name)} stroke="#fff" />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </CardShell>
-
-        <CardShell
-          title="Category Weights — AFP vs System"
-          subtitle="Bubble size = (iShares + BlackRock) share within Category"
-          right={<AfpSinglePicker value={bubbleAfp} onChange={setBubbleAfp} />}
-        >
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart margin={{ top: 16, right: 16, left: 0, bottom: 8 }}>
@@ -297,6 +232,83 @@ export function Scorecard() {
                   isAnimationActive={false}
                 />
               </ScatterChart>
+            </ResponsiveContainer>
+          </div>
+      </CardShell>
+
+      {/* AUM Org evolution + Top 5 Managers donut */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <CardShell
+          className="lg:col-span-2"
+          title={aumMetric === "AUM_USD" ? "AUM Org — Evolution by Asset Type" : "Monthly NNB — Evolution by Asset Type"}
+          subtitle="Trailing 12 months, stacked by ETF / Mutual Fund / Money Market"
+          right={
+            <>
+              <SegmentedToggle options={METRIC_TOGGLE} value={aumMetric} onChange={setAumMetric} />
+              <AfpFilterPopover value={aumLocalAfps} onChange={setAumLocalAfps} />
+            </>
+          }
+        >
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={aumSeries} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
+                <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
+                <YAxis tickFormatter={(v) => formatUSD(v)} stroke="#999" fontSize={11} width={70} />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(v: number, n) => [formatUSD(v), n]}
+                  labelFormatter={(l) => shortMonth(l as string)}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {BUCKETS.map((b) => (
+                  <Area
+                    key={b}
+                    type="monotone"
+                    dataKey={b}
+                    stackId="1"
+                    stroke={BUCKET_COLOR[b]}
+                    fill={BUCKET_COLOR[b]}
+                    fillOpacity={0.8}
+                    isAnimationActive={false}
+                  />
+                ))}
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </CardShell>
+
+        <CardShell
+          title="Top 5 Managers — Market Share"
+          subtitle="By AUM, remainder grouped as Others"
+          right={<SegmentedToggle options={BUCKET_TOGGLE} value={pieBucket} onChange={setPieBucket} />}
+        >
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(v: number, n) => [formatUSD(v), n]}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Pie
+                  data={pieData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={45}
+                  outerRadius={85}
+                  paddingAngle={1}
+                  isAnimationActive={false}
+                  label={({ percent }) => `${((percent ?? 0) * 100).toFixed(0)}%`}
+                  labelLine={false}
+                >
+                  {pieData.map((d) => (
+                    <Cell key={d.name} fill={brandColor(d.name)} stroke="#fff" />
+                  ))}
+                </Pie>
+              </PieChart>
             </ResponsiveContainer>
           </div>
         </CardShell>
