@@ -641,7 +641,7 @@ export function getCategoryCompositionSeries(afps: AFP[], bucket: Bucket) {
   const cats = CATEGORIES.filter((c) =>
     bucket === "Money Market" ? c === "Money Market" : c !== "Money Market",
   );
-  return MONTHS.map((m) => {
+  const series = MONTHS.map((m) => {
     const rows = rowsAt(m, afps).filter((r) => bucketOf(r) === bucket);
     const raw: Record<string, number> = {};
     let total = 0;
@@ -654,6 +654,38 @@ export function getCategoryCompositionSeries(afps: AFP[], bucket: Bucket) {
     for (const c of cats) out[c] = total ? raw[c] / total : 0;
     out.__raw = raw;
     return out as { m: string; total: number; __raw: Record<string, number> } & Record<string, number>;
+  });
+  // Collapse small categories into "Others" for readability.
+  const totals = new Map<string, number>();
+  for (const c of cats) {
+    let t = 0;
+    for (const row of series) t += (row.__raw?.[c] ?? 0) as number;
+    totals.set(c, t);
+  }
+  const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const keep = new Set(ranked.slice(0, STACK_TOP_N).map(([k]) => k));
+  const dropped = ranked.slice(STACK_TOP_N).map(([k]) => k);
+  if (dropped.length === 0) return series;
+  return series.map((row) => {
+    const newRaw: Record<string, number> = {};
+    let othersRaw = 0;
+    let othersPct = 0;
+    for (const c of cats) {
+      if (keep.has(c)) newRaw[c] = row.__raw[c] ?? 0;
+      else {
+        othersRaw += row.__raw[c] ?? 0;
+        othersPct += (row[c] as number) ?? 0;
+      }
+    }
+    newRaw["Others"] = othersRaw;
+    const out: Record<string, number | string | Record<string, number>> = {
+      m: row.m,
+      total: row.total,
+      __raw: newRaw,
+    };
+    for (const c of cats) if (keep.has(c)) out[c] = row[c] as number;
+    out["Others"] = othersPct;
+    return out as typeof row;
   });
 }
 
