@@ -105,16 +105,19 @@ export function getKPIs(f: Filters) {
   );
 
   const aum = sumBy(cur, (r) => r.AUM_USD);
-  const nnb = sumBy(cur, (r) => r.NNB_USD);
+  const nnb = sumBy(cur, (r) => r.NNB_YTD_USD);
   const rrr = sumBy(cur, (r) => r.RRR_USD);
-  const nnbf = nnb * 0.0035; // proxy
+  const nnbf = sumBy(cur, (r) => r.NNBF_YTD_USD);
 
   const aumPrev = sumBy(prev, (r) => r.AUM_USD) || 1;
-  const nnbPrev = sumBy(prev, (r) => r.NNB_USD) || 1;
+  const nnbPrev = sumBy(prev, (r) => r.NNB_YTD_USD) || 1;
   const rrrPrev = sumBy(prev, (r) => r.RRR_USD) || 1;
+  const nnbfPrev = sumBy(prev, (r) => r.NNBF_YTD_USD) || 1;
 
   // 4-month sparkline
-  const trend = (metric: "AUM_USD" | "NNB_USD" | "RRR_USD") => {
+  const trend = (
+    metric: "AUM_USD" | "NNB_USD" | "RRR_USD" | "NNB_YTD_USD" | "NNBF_YTD_USD",
+  ) => {
     const startIdx = Math.max(0, MONTHS.indexOf(f.date) - 3);
     return MONTHS.slice(startIdx, MONTHS.indexOf(f.date) + 1).map((m) => {
       const rows = applyFilters(MASTER_DATA, { ...f, date: m }).filter((r) => r.Manager === "BlackRock");
@@ -128,11 +131,12 @@ export function getKPIs(f: Filters) {
     rrr,
     nnbf,
     aumDelta: (aum - sumBy(prev, (r) => r.AUM_USD)) / aumPrev,
-    nnbDelta: (nnb - sumBy(prev, (r) => r.NNB_USD)) / Math.abs(nnbPrev),
+    nnbDelta: (nnb - sumBy(prev, (r) => r.NNB_YTD_USD)) / Math.abs(nnbPrev),
     rrrDelta: (rrr - sumBy(prev, (r) => r.RRR_USD)) / Math.abs(rrrPrev),
-    nnbfDelta: (nnbf - nnbPrev * 0.0035) / Math.abs(nnbPrev * 0.0035),
+    nnbfDelta: (nnbf - sumBy(prev, (r) => r.NNBF_YTD_USD)) / Math.abs(nnbfPrev),
     trendAUM: trend("AUM_USD"),
-    trendNNB: trend("NNB_USD"),
+    trendNNB: trend("NNB_YTD_USD"),
+    trendNNBF: trend("NNBF_YTD_USD"),
     trendRRR: trend("RRR_USD"),
   };
 }
@@ -253,10 +257,29 @@ export const CHART_COLORS = {
   grayPalette: ["#000000", "#4D4D4D", "#7A7A7A", "#999999", "#B8B8B8", "#D4D4D4"],
 };
 
+// Vibrant accent palette used across charts for managers / categories.
+// Built from the brand green plus the requested lime/yellow-green/gold/orange family.
+export const ACCENT_PALETTE = [
+  "#00B140", // brand green
+  "#FFA500", // orange
+  "#FFD700", // gold
+  "#32CD32", // lime green
+  "#9ACD32", // yellow-green
+  "#FF8C00", // dark orange
+  "#1F7A3A", // deep green
+  "#FFB347", // soft orange
+  "#BFEA3A", // soft lime
+  "#E6C200", // mustard
+];
+
+export const STACK_TOP_N = 6;
+
 export function managerColor(m: Manager) {
   if (m === "BlackRock") return CHART_COLORS.blk;
-  const idx = MANAGERS.filter((x) => x !== "BlackRock").indexOf(m);
-  return CHART_COLORS.grayPalette[idx + 1] ?? CHART_COLORS.competitor;
+  if (m === "Others" || m === "Other") return CHART_COLORS.competitor;
+  const others = MANAGERS.filter((x) => x !== "BlackRock");
+  const idx = others.indexOf(m);
+  return ACCENT_PALETTE[(idx >= 0 ? idx + 1 : 0) % ACCENT_PALETTE.length];
 }
 
 // ---------- Brand & bucket helpers ----------
@@ -278,18 +301,17 @@ export function bucketOf(r: MasterRow): Bucket {
 
 export function brandColor(b: string) {
   if (b === "iShares") return CHART_COLORS.blk;
-  if (b === "BlackRock") return CHART_COLORS.blkAlt;
-  if (b === "Others") return "#CCCCCC";
-  // grey palette for rest
+  if (b === "BlackRock") return "#1F7A3A";
+  if (b === "Others" || b === "Other") return CHART_COLORS.competitor;
   const others = MANAGERS.filter((x) => x !== "BlackRock") as string[];
   const idx = others.indexOf(b);
-  return CHART_COLORS.grayPalette[(idx >= 0 ? idx : 0) + 1] ?? CHART_COLORS.competitor;
+  return ACCENT_PALETTE[(idx >= 0 ? idx + 1 : 0) % ACCENT_PALETTE.length];
 }
 
 export const BUCKET_COLOR: Record<Bucket, string> = {
   ETF: CHART_COLORS.blk,
-  "Mutual Fund": CHART_COLORS.blkAlt,
-  "Money Market": "#B8B8B8",
+  "Mutual Fund": "#FFA500",
+  "Money Market": "#FFD700",
 };
 
 function monthsYTD(date: string): string[] {
@@ -582,23 +604,45 @@ export function getNnbByManagerStacked(
     row[r.Category] = (row[r.Category] as number) + r.NNB_USD;
     row.total += r.NNB_USD;
   }
-  return [...byMgr.values()].sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+  const data = [...byMgr.values()].sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+  // Collapse small categories into "Others".
+  const totals = new Map<string, number>();
+  for (const c of CATEGORIES) {
+    let t = 0;
+    for (const row of data) t += Math.abs((row[c] as number) ?? 0);
+    totals.set(c, t);
+  }
+  const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const keep = new Set(ranked.slice(0, STACK_TOP_N).map(([k]) => k));
+  const dropped = CATEGORIES.filter((c) => !keep.has(c));
+  if (dropped.length === 0) return { data, categories: CATEGORIES as string[] };
+  for (const row of data) {
+    let others = 0;
+    for (const c of dropped) {
+      others += (row[c] as number) ?? 0;
+      delete (row as Record<string, unknown>)[c];
+    }
+    (row as Record<string, number>)["Others"] = others;
+  }
+  const keptOrdered = CATEGORIES.filter((c) => keep.has(c));
+  return { data, categories: [...keptOrdered, "Others"] };
 }
 
 const CATEGORY_PALETTE = [
-  "#00B140",
-  "#1F7A3A",
-  "#000000",
-  "#4D4D4D",
-  "#7A7A7A",
-  "#999999",
-  "#B8B8B8",
-  "#D4D4D4",
-  "#005f24",
-  "#3a8a5a",
+  "#00B140", // brand green
+  "#32CD32", // lime
+  "#9ACD32", // yellow-green
+  "#FFD700", // gold
+  "#FFA500", // orange
+  "#1F7A3A", // deep green
+  "#FF8C00", // dark orange
+  "#BFEA3A", // soft lime
+  "#E6C200", // mustard
+  "#FFB347", // soft orange
 ];
 export function categoryColor(c: Category) {
-  if (c === "Money Market") return "#B8B8B8";
+  if (c === "Money Market") return "#FFD700";
+  if (c === "Others" || c === "Other") return CHART_COLORS.competitor;
   const idx = CATEGORIES.indexOf(c);
   return CATEGORY_PALETTE[(idx >= 0 ? idx : 0) % CATEGORY_PALETTE.length];
 }
@@ -618,7 +662,7 @@ export function getCategoryCompositionSeries(afps: AFP[], bucket: Bucket) {
   const cats = CATEGORIES.filter((c) =>
     bucket === "Money Market" ? c === "Money Market" : c !== "Money Market",
   );
-  return MONTHS.map((m) => {
+  const series = MONTHS.map((m) => {
     const rows = rowsAt(m, afps).filter((r) => bucketOf(r) === bucket);
     const raw: Record<string, number> = {};
     let total = 0;
@@ -632,6 +676,40 @@ export function getCategoryCompositionSeries(afps: AFP[], bucket: Bucket) {
     out.__raw = raw;
     return out as { m: string; total: number; __raw: Record<string, number> } & Record<string, number>;
   });
+  // Collapse small categories into "Others" for readability.
+  const totals = new Map<string, number>();
+  for (const c of cats) {
+    let t = 0;
+    for (const row of series) t += row.__raw?.[c] ?? 0;
+    totals.set(c, t);
+  }
+  const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const keep = new Set(ranked.slice(0, STACK_TOP_N).map(([k]) => k));
+  const dropped = ranked.slice(STACK_TOP_N).map(([k]) => k);
+  if (dropped.length === 0) return { data: series, categories: cats as string[] };
+  const data = series.map((row) => {
+    const newRaw: Record<string, number> = {};
+    let othersRaw = 0;
+    let othersPct = 0;
+    for (const c of cats) {
+      if (keep.has(c)) newRaw[c] = row.__raw[c] ?? 0;
+      else {
+        othersRaw += row.__raw[c] ?? 0;
+        othersPct += (row[c] as number) ?? 0;
+      }
+    }
+    newRaw["Others"] = othersRaw;
+    const out: Record<string, number | string | Record<string, number>> = {
+      m: row.m,
+      total: row.total,
+      __raw: newRaw,
+    };
+    for (const c of cats) if (keep.has(c)) out[c] = row[c] as number;
+    out["Others"] = othersPct;
+    return out as typeof row;
+  });
+  const keptOrdered = cats.filter((c) => keep.has(c));
+  return { data, categories: [...keptOrdered, "Others"] };
 }
 
 /** Per-position rows for the AFP positions table. */
@@ -750,7 +828,27 @@ export function getCumulativeNnbStacked(
     }
     return row;
   });
-  return { data, stackKeys };
+  // Collapse small stack keys into "Others" for readability.
+  const totals = new Map<string, number>();
+  for (const k of stackKeys) {
+    let t = 0;
+    for (const row of data) t += Math.abs((row[k] as number) ?? 0);
+    totals.set(k, t);
+  }
+  const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const keep = new Set(ranked.slice(0, STACK_TOP_N).map(([k]) => k));
+  const dropped = stackKeys.filter((k) => !keep.has(k));
+  if (dropped.length === 0) return { data, stackKeys };
+  for (const row of data) {
+    let others = 0;
+    for (const k of dropped) {
+      others += (row[k] as number) ?? 0;
+      delete (row as Record<string, unknown>)[k];
+    }
+    row["Others"] = others;
+  }
+  const keptOrdered = stackKeys.filter((k) => keep.has(k));
+  return { data, stackKeys: [...keptOrdered, "Others"] };
 }
 
 /** Top 5 + Bottom 5 securities by flows. */
@@ -984,7 +1082,27 @@ export function getRrrByAfpCategory(managers: Manager[], bucket: Bucket, date: s
     }
     return row;
   });
-  return { data, categories: cats as string[] };
+  // Collapse small categories into "Others" for readability.
+  const totals = new Map<string, number>();
+  for (const c of cats) {
+    let t = 0;
+    for (const row of data) t += Math.abs((row[c] as number) ?? 0);
+    totals.set(c, t);
+  }
+  const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const keep = new Set(ranked.slice(0, STACK_TOP_N).map(([k]) => k));
+  const dropped = (cats as string[]).filter((c) => !keep.has(c));
+  if (dropped.length === 0) return { data, categories: cats as string[] };
+  for (const row of data) {
+    let others = 0;
+    for (const c of dropped) {
+      others += (row[c] as number) ?? 0;
+      delete (row as Record<string, unknown>)[c];
+    }
+    row["Others"] = others;
+  }
+  const keptOrdered = (cats as string[]).filter((c) => keep.has(c));
+  return { data, categories: [...keptOrdered, "Others"] };
 }
 
 /** Category fee bubbles: system vs selected AFP, with category AUM share & BLK share. */

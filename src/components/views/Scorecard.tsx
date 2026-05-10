@@ -138,7 +138,6 @@ export function Scorecard() {
   );
   const etfComp = useMemo(() => getCategoryCompositionSeries(compAfps, "ETF"), [compAfps]);
   const mfComp = useMemo(() => getCategoryCompositionSeries(compAfps, "Mutual Fund"), [compAfps]);
-  const compCats = CATEGORIES.filter((c) => c !== "Money Market");
 
   return (
     <div className="p-3 sm:p-6 space-y-6">
@@ -154,7 +153,7 @@ export function Scorecard() {
         <KpiCard label="BLK RRR (Monthly)" value={formatUSD(k.rrr)} delta={k.rrrDelta} trend={k.trendRRR} />
         <KpiCard label="Total BLK AUM" value={formatUSD(k.aum)} delta={k.aumDelta} trend={k.trendAUM} />
         <KpiCard label="BLK YTD NNB" value={formatUSD(k.nnb)} delta={k.nnbDelta} trend={k.trendNNB} />
-        <KpiCard label="BLK YTD NNBF" value={formatUSD(k.nnbf)} delta={k.nnbfDelta} trend={k.trendNNB} />
+        <KpiCard label="BLK YTD NNBF" value={formatUSD(k.nnbf)} delta={k.nnbfDelta} trend={k.trendNNBF} />
         <KpiCard
           label="iShares Share — ETF AUM"
           value={formatPct(bk.iSharesEtf, 1)}
@@ -313,13 +312,13 @@ export function Scorecard() {
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {([
-          { title: "ETF — Composition by Category", data: etfComp },
-          { title: "Mutual Fund — Composition by Category", data: mfComp },
+          { title: "ETF — Composition by Category", series: etfComp },
+          { title: "Mutual Fund — Composition by Category", series: mfComp },
         ] as const).map((card) => (
           <CardShell key={card.title} title={card.title} subtitle="100% stacked share of AUM Org over time">
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={card.data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <AreaChart data={card.series.data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
                   <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
                   <YAxis
@@ -338,7 +337,7 @@ export function Scorecard() {
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  {compCats.map((c) => (
+                  {card.series.categories.map((c) => (
                     <Area
                       key={c}
                       type="monotone"

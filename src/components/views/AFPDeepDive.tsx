@@ -316,7 +316,7 @@ export function AFPDeepDive() {
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
-              data={nnbStacked}
+              data={nnbStacked.data}
               layout="vertical"
               margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
             >
@@ -328,7 +328,7 @@ export function AFPDeepDive() {
                 formatter={(v: number, n) => [formatUSD(v), n]}
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              {CATEGORIES.map((c) => (
+              {nnbStacked.categories.map((c) => (
                 <Bar key={c} dataKey={c} stackId="nnb" fill={categoryColor(c)} isAnimationActive={false} />
               ))}
             </BarChart>
