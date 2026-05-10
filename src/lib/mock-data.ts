@@ -301,18 +301,17 @@ export function bucketOf(r: MasterRow): Bucket {
 
 export function brandColor(b: string) {
   if (b === "iShares") return CHART_COLORS.blk;
-  if (b === "BlackRock") return CHART_COLORS.blkAlt;
-  if (b === "Others") return "#CCCCCC";
-  // grey palette for rest
+  if (b === "BlackRock") return "#1F7A3A";
+  if (b === "Others" || b === "Other") return CHART_COLORS.competitor;
   const others = MANAGERS.filter((x) => x !== "BlackRock") as string[];
   const idx = others.indexOf(b);
-  return CHART_COLORS.grayPalette[(idx >= 0 ? idx : 0) + 1] ?? CHART_COLORS.competitor;
+  return ACCENT_PALETTE[(idx >= 0 ? idx + 1 : 0) % ACCENT_PALETTE.length];
 }
 
 export const BUCKET_COLOR: Record<Bucket, string> = {
   ETF: CHART_COLORS.blk,
-  "Mutual Fund": CHART_COLORS.blkAlt,
-  "Money Market": "#B8B8B8",
+  "Mutual Fund": "#FFA500",
+  "Money Market": "#FFD700",
 };
 
 function monthsYTD(date: string): string[] {
