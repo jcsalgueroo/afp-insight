@@ -659,14 +659,14 @@ export function getCategoryCompositionSeries(afps: AFP[], bucket: Bucket) {
   const totals = new Map<string, number>();
   for (const c of cats) {
     let t = 0;
-    for (const row of series) t += (row.__raw?.[c] ?? 0) as number;
+    for (const row of series) t += row.__raw?.[c] ?? 0;
     totals.set(c, t);
   }
   const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
   const keep = new Set(ranked.slice(0, STACK_TOP_N).map(([k]) => k));
   const dropped = ranked.slice(STACK_TOP_N).map(([k]) => k);
-  if (dropped.length === 0) return series;
-  return series.map((row) => {
+  if (dropped.length === 0) return { data: series, categories: cats as string[] };
+  const data = series.map((row) => {
     const newRaw: Record<string, number> = {};
     let othersRaw = 0;
     let othersPct = 0;
@@ -687,6 +687,8 @@ export function getCategoryCompositionSeries(afps: AFP[], bucket: Bucket) {
     out["Others"] = othersPct;
     return out as typeof row;
   });
+  const keptOrdered = cats.filter((c) => keep.has(c));
+  return { data, categories: [...keptOrdered, "Others"] };
 }
 
 /** Per-position rows for the AFP positions table. */
