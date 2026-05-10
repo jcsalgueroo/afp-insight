@@ -48,6 +48,11 @@ const BUCKET_TOGGLE = [
   { value: "Money Market" as Bucket, label: "MM" },
 ] as const;
 
+const WEIGHTS_BUCKET_TOGGLE = [
+  { value: "ETF" as Bucket, label: "ETF" },
+  { value: "Mutual Fund" as Bucket, label: "MF" },
+] as const;
+
 const METRIC_TOGGLE = [
   { value: "AUM_USD" as const, label: "AUM Org" },
   { value: "NNB_USD" as const, label: "Monthly NNB" },
@@ -124,6 +129,7 @@ export function Scorecard() {
 
   const [pieBucket, setPieBucket] = useState<Bucket>("ETF");
   const [bubbleAfp, setBubbleAfp] = useState<AFP>(AFPS[0]);
+  const [weightsBucket, setWeightsBucket] = useState<Bucket>("ETF");
 
   const [compAfps, setCompAfps] = useState<AFP[]>([]);
 
@@ -133,8 +139,8 @@ export function Scorecard() {
   );
   const pieData = useMemo(() => getTopManagersPie(filters, pieBucket), [filters, pieBucket]);
   const bubbles = useMemo(
-    () => getCategoryWeightBubbles({ ...filters, blkOnly: false }, bubbleAfp),
-    [filters, bubbleAfp],
+    () => getCategoryWeightBubbles({ ...filters, blkOnly: false }, bubbleAfp, weightsBucket),
+    [filters, bubbleAfp, weightsBucket],
   );
   const etfComp = useMemo(() => getCategoryCompositionSeries(compAfps, "ETF"), [compAfps]);
   const mfComp = useMemo(() => getCategoryCompositionSeries(compAfps, "Mutual Fund"), [compAfps]);
