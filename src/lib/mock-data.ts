@@ -419,7 +419,6 @@ export function getYtdByManagerSeries(
     }
   }
   const brands = [...totals.entries()].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 6).map(([k]) => k);
-  const cum: Record<string, number> = Object.fromEntries(brands.map((b) => [b, 0]));
   const data = months.map((m) => {
     const row: Record<string, number | string> = { m };
     const monthly: Record<string, number> = Object.fromEntries(brands.map((b) => [b, 0]));
@@ -430,8 +429,7 @@ export function getYtdByManagerSeries(
       monthly[b] += v;
     }
     for (const b of brands) {
-      cum[b] += monthly[b];
-      row[b] = cum[b];
+      row[b] = monthly[b];
     }
     return row;
   });
@@ -1040,19 +1038,15 @@ function flowRows(
   );
 }
 
-/** Top 5 managers by NNB + Others. */
-export function getNnbDonut(afps: AFP[], bucket: Bucket, period: Period, date: string) {
+/** NNB by manager (all non-zero), sorted descending. */
+export function getNnbByManager(afps: AFP[], bucket: Bucket, period: Period, date: string) {
   const rows = flowRows(afps, bucket, period, date);
   const m = new Map<Manager, number>();
   for (const r of rows) m.set(r.Manager, (m.get(r.Manager) ?? 0) + r.NNB_USD);
-  const sorted = [...m.entries()]
+  return [...m.entries()]
     .map(([Manager, NNB]) => ({ Manager: Manager as string, NNB }))
-    .sort((a, b) => Math.abs(b.NNB) - Math.abs(a.NNB));
-  const top = sorted.slice(0, 5);
-  const others = sorted.slice(5);
-  const othersSum = others.reduce((a, b) => a + b.NNB, 0);
-  if (others.length) top.push({ Manager: "Others", NNB: othersSum });
-  return top;
+    .filter((d) => d.NNB !== 0)
+    .sort((a, b) => b.NNB - a.NNB);
 }
 
 /** Cumulative NNB stacked bars: by Manager (X) stacked by Category, or vice versa. */
@@ -1079,27 +1073,21 @@ export function getCumulativeNnbStacked(
     }
     return row;
   });
-  // Collapse small stack keys into "Others" for readability.
-  const totals = new Map<string, number>();
-  for (const k of stackKeys) {
+  // Drop stack keys whose total across all rows is 0
+  const keptStack = stackKeys.filter((k) => {
     let t = 0;
     for (const row of data) t += Math.abs((row[k] as number) ?? 0);
-    totals.set(k, t);
-  }
-  const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
-  const keep = new Set(ranked.slice(0, STACK_TOP_N).map(([k]) => k));
-  const dropped = stackKeys.filter((k) => !keep.has(k));
-  if (dropped.length === 0) return { data, stackKeys };
-  for (const row of data) {
-    let others = 0;
-    for (const k of dropped) {
-      others += (row[k] as number) ?? 0;
-      delete (row as Record<string, unknown>)[k];
-    }
-    row["Others"] = others;
-  }
-  const keptOrdered = stackKeys.filter((k) => keep.has(k));
-  return { data, stackKeys: [...keptOrdered, "Others"] };
+    return t > 0;
+  });
+  // Drop X rows that are all zero across kept stack keys
+  const filtered = data
+    .map((row) => {
+      const out: Record<string, number | string> = { key: row.key };
+      for (const k of keptStack) out[k] = (row[k] as number) ?? 0;
+      return out;
+    })
+    .filter((row) => keptStack.some((k) => (row[k] as number) !== 0));
+  return { data: filtered, stackKeys: keptStack };
 }
 
 /** Top 5 + Bottom 5 securities by flows. */
@@ -1111,28 +1099,37 @@ export function getTopBottomSecurities(
   date: string,
 ) {
   const rows = flowRows(afps, bucket, period, date, managers);
-  const map = new Map<string, { isin: string; name: string; manager: Manager; nnb: number }>();
+  const map = new Map<
+    string,
+    {
+      isin: string;
+      name: string;
+      manager: Manager;
+      nnb: number;
+      byAfp: Map<AFP, number>;
+    }
+  >();
   for (const r of rows) {
-    const cur = map.get(r.ISIN) ?? { isin: r.ISIN, name: r.Name, manager: r.Manager, nnb: 0 };
+    const cur =
+      map.get(r.ISIN) ??
+      { isin: r.ISIN, name: r.Name, manager: r.Manager, nnb: 0, byAfp: new Map<AFP, number>() };
     cur.nnb += r.NNB_USD;
+    cur.byAfp.set(r.AFP, (cur.byAfp.get(r.AFP) ?? 0) + r.NNB_USD);
     map.set(r.ISIN, cur);
   }
   const all = [...map.values()].sort((a, b) => b.nnb - a.nnb);
-  const top = all.slice(0, 5).map((x) => ({
+  const shape = (x: typeof all[number], isTop: boolean) => ({
     label: bucket === "ETF" ? tickerOf(x.isin) : x.name,
     nnb: x.nnb,
     manager: x.manager,
-    isTop: true,
-  }));
-  const bottom = all
-    .slice(-5)
-    .reverse()
-    .map((x) => ({
-      label: bucket === "ETF" ? tickerOf(x.isin) : x.name,
-      nnb: x.nnb,
-      manager: x.manager,
-      isTop: false,
-    }));
+    isin: x.isin,
+    isTop,
+    afpBreakdown: [...x.byAfp.entries()]
+      .map(([AFP, NNB]) => ({ AFP, NNB }))
+      .sort((a, b) => Math.abs(b.NNB) - Math.abs(a.NNB)),
+  });
+  const top = all.slice(0, 5).map((x) => shape(x, true));
+  const bottom = all.slice(-5).reverse().map((x) => shape(x, false));
   return [...top, ...bottom].sort((a, b) => b.nnb - a.nnb);
 }
 
@@ -1156,6 +1153,7 @@ export function getScatterFiltered(
   categories: Category[],
   period: Period,
   date: string,
+  bucket: "ETF" | "Mutual Fund" = "ETF",
 ) {
   const dates = period === "YTD" ? monthsYTD(date) : [date];
   const rows = MASTER_DATA.filter(
@@ -1163,24 +1161,37 @@ export function getScatterFiltered(
       dates.includes(r.Date) &&
       (afps.length === 0 || afps.includes(r.AFP)) &&
       (managers.length === 0 || managers.includes(r.Manager)) &&
-      (categories.length === 0 || categories.includes(r.Category)),
+      (categories.length === 0 || categories.includes(r.Category)) &&
+      bucketOf(r) === bucket,
   );
   const map = new Map<
     string,
-    { Manager: Manager; AUM: number; NNB: number; Perf: number; Name: string }
+    {
+      Manager: Manager;
+      AUM: number;
+      NNB: number;
+      Perf: number;
+      Name: string;
+      Ticker: string;
+      Bucket: "ETF" | "Mutual Fund";
+    }
   >();
   for (const r of rows) {
     const cur = map.get(r.ISIN);
+    const perf = period === "YTD" ? r.Perf_YTD : r.Perf_Month;
     if (cur) {
       cur.AUM += r.AUM_USD;
       cur.NNB += r.NNB_USD;
+      cur.Perf = perf;
     } else {
       map.set(r.ISIN, {
         Manager: r.Manager,
         AUM: r.AUM_USD,
         NNB: r.NNB_USD,
-        Perf: r.YTD_Perf,
+        Perf: perf,
         Name: r.Name,
+        Ticker: tickerOf(r.ISIN),
+        Bucket: bucket,
       });
     }
   }

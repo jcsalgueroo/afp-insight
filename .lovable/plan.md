@@ -1,42 +1,64 @@
-## AFP Deep Dive — Tooltip & Treemap polish
+# Flows Intelligence — Chart Overhaul
 
-### 1. Treemap leaves: show weight % in bottom-right
-In `FlatNode` (the custom Treemap content):
-- Receive the leaf's `size` and the total of all leaves to compute `weight = size / total`. Pass `total` via a closure (compute once from `treeData`) or via the node's `root` prop that Recharts injects.
-- Render a second `<text>` anchored bottom-right of the rect (`x + width - 6`, `y + height - 6`, `textAnchor="end"`) with the formatted percentage (e.g. `12.4%`).
-- Only render the percentage when the leaf is large enough to fit it — gate on `width > 40 && height > 28` (separate from the existing name-label gate). Very small leaves stay clean.
-- Keep the existing name label rule (`width > 60 && height > 24`) unchanged.
+Scope: `src/components/views/Flows.tsx` (UI) and `src/lib/mock-data.ts` (selectors). No business-logic / data-model changes.
 
-### 2. Treemap hover card: per-leaf, not card-wide
-Today the donut overlay uses `group-hover` on the whole card and always shows the same Top-5-of-opposite-dimension donut. Change to a hover-driven, leaf-specific panel:
-- Track `hoveredLeaf` state in `AFPDeepDive` (the leaf's `name` + `key`). Set it from `onMouseEnter` / `onMouseLeave` handlers added to the `<rect>` inside `FlatNode` (pass setter via context or props).
-- Hide the panel when `hoveredLeaf == null` (replace the `group-hover:opacity-100` mechanism).
-- Compute a leaf-scoped donut:
-  - **By Manager mode** → hovered leaf is a manager. Donut shows that manager's Top-5 categories + Others (weights within that manager's AUM in the current bucket / AFP scope).
-  - **By Category mode** → hovered leaf is a category. Donut shows that category's Top-5 managers + Others.
-- Add a new selector `getAfpCompositionLeafDonut(afps, bucket, dimension, leafName, date)` in `mock-data.ts` that returns `{ items: {name,value,fill}[], title: string }`. Reuse the existing aggregation pipeline; just filter to the hovered manager or category before grouping the opposite dimension.
-- Panel header changes to `"<Leaf name> — Top 5 <opposite> + Others"`.
+## 1. NNB by Manager — donut → bar chart
 
-### 3. Donut + legend fit inside the card
-Current panel is `w-56 h-56` with the donut taking ~80% and the legend grid at the bottom — the legend overflows when there are 6 rows of long names. Restructure the panel so donut and legend both fit:
-- Widen and reshape the panel to a horizontal layout: `w-72` (or `w-80`) and `h-auto` with `max-h` cap, so it scales to the legend rather than clipping.
-- Inside: small header row, then a flex row → left: donut `w-28 h-28` (fixed), right: legend as a vertical list (`flex-col`, single column) with `truncate` on the name and `tabular-nums` on the percent. This ensures every legend row is fully visible.
-- Keep total label centered inside the donut; reduce font sizes accordingly.
-- Ensure the panel still uses `pointer-events-none` and stays positioned `absolute top-3 right-3`, but switch to `max-w-[calc(100%-1.5rem)]` to never exceed the chart area.
+- Replace `RPieChart` with a horizontal `BarChart` (`layout="vertical"`).
+- Keep current toggles: Bucket (ETF/MF/MM), Period (Month/YTD), AFP filter.
+- Reuse `getNnbDonut` (rename internally to a manager-level NNB selector — same shape `{Manager, NNB}`) but **drop "Others"** and **return all managers with NNB ≠ 0**, sorted by NNB descending.
+- Diverging around 0: `ReferenceLine x={0}`, bar fill = `managerColor(Manager)`; positives extend right, negatives left.
+- Remove the donut center label (Total NNB); show total as small text in the card header (right side or subtitle).
 
-### 4. NNB tooltip — sort by signed value, not absolute
-In `NnbTooltip` (`AFPDeepDive.tsx` ~line 670):
-- Replace `.sort((a, b) => Math.abs(b.value) - Math.abs(a.value))` with a signed sort that lists all positive flows first (largest positive on top, descending) followed by all negative flows (largest in magnitude first, i.e. most negative last or first within the negatives — see below).
-- Concrete order: `positives desc by value, then negatives desc by value` (so the breakdown reads `+$120M, +$40M, +$5M, −$8M, −$60M`). This puts positives first, sorted largest-to-smallest, then negatives sorted from least-negative to most-negative.
-- Implementation: split into `pos = items.filter(v>0).sort((a,b)=>b.value-a.value)` and `neg = items.filter(v<0).sort((a,b)=>b.value-a.value)`, then concat.
-- Net total header and color logic stay as-is.
+## 2. Cumulative NNB — prune zero rows / stack keys
 
-### Technical notes
-- All UI changes confined to `src/components/views/AFPDeepDive.tsx`.
-- One additive selector in `src/lib/mock-data.ts`: `getAfpCompositionLeafDonut(...)`.
-- For passing `hoveredLeaf` setter into `FlatNode`, simplest is a tiny module-scope React context (`TreemapHoverContext`) created in this file and consumed by `FlatNode`; avoids prop-drilling through Recharts' `content` prop.
-- No design tokens / layout system changes.
+- In `getCumulativeNnbStacked`, after building `data`:
+  - Filter out X categories whose row sum across all stack keys is 0.
+  - Filter out stack keys whose total across all rows is 0 (before / instead of the existing top-N collapse, so empty keys never become "Others").
+- Behavior: ETF bucket hides Allianz on the X axis (Manager mode) and hides MM-only categories (already handled), and similarly hides empty stack keys.
 
-### Out of scope
-- All other charts and views.
-- Data model / mock dataset changes.
+## 3. Performance vs Flows — ETF/MF toggle + per-security bubbles + rich hover
+
+- Add `SegmentedToggle` for `ETF` | `Mutual Fund` (default ETF) — replaces nothing, sits alongside existing Period/AFP/Managers/Categories filters.
+- Update `getScatterFiltered` to accept `bucket: "ETF" | "Mutual Fund"` and filter rows via `bucketOf(r) === bucket`. Each row already aggregates per ISIN so each bubble is one security; include `Ticker` (via `tickerOf(isin)`) and `Bucket` in the returned shape.
+- Color bubbles by Manager (existing `scatterByManager` grouping works).
+- Custom Recharts `Tooltip content={...}` showing:
+  - Manager (bold)
+  - Ticker (ETF) or Name (MF)
+  - AUM — `formatUSD`
+  - Performance — `${perf.toFixed(2)}%` (NO dollar sign, percentage formatting)
+- Y axis still NNB, X axis still Perf%.
+
+## 4. Move "Flows by Category — ETF vs MF" directly below Performance vs Flows
+
+- Reorder JSX in `Flows.tsx` so the `Flows by Category` `CardShell` renders immediately after `Performance vs Flows`, before Top/Bottom 5 and the rest.
+
+## 5. Top 5 / Bottom 5 — hover card with AFP breakdown
+
+- Extend `getTopBottomSecurities` rows with `isin` and `afpBreakdown: {AFP, NNB}[]` (sorted by `|NNB|` desc, computed from `flowRows` filtered by ISIN).
+- Replace default Recharts tooltip with a custom `content` component:
+  - Manager
+  - Label (Ticker or Name) — already present
+  - NNB total — `formatUSD`
+  - Table: AFP → NNB (signed), one row per AFP that traded.
+
+## 6. Monthly Flows by Bucket — diverging stacked bars
+
+- Recharts stacks signed values natively. Add `ReferenceLine y={0}`. Confirm bars use a single `stackId` (already do). Negative bucket totals will render below zero automatically; no selector change required (values are already signed).
+- Add `stackOffset="sign"` on `BarChart` to get true diverging stacking (positives up, negatives down per bar).
+
+## 7. YTD NNB by Manager + YTD NNBF by Manager — stacked diverging bars (per-month)
+
+- Replace `AreaChart` with `BarChart` + `stackOffset="sign"` and `ReferenceLine y={0}`.
+- Update `getYtdByManagerSeries` to return **per-month signed values** (not the running cumulative). Same shape `{ data: [{m, [brand]: monthlyNNB}], brands }`. This way managers with negative monthly NNB appear below zero; the YTD framing is preserved by spanning all YTD months on the X axis.
+- Same for NNBF (already uses the same selector with `metric="NNBF"`).
+- Brands still chosen by absolute YTD totals; bar fill = `brandColor(b)`; legend unchanged.
+
+## Technical notes
+
+- Files touched:
+  - `src/components/views/Flows.tsx` — JSX reorder, chart-type swaps, custom tooltip components, new ETF/MF toggle state.
+  - `src/lib/mock-data.ts` — `getNnbDonut` (rename/repurpose for full bar list), `getCumulativeNnbStacked` (zero pruning), `getScatterFiltered` (bucket param + ticker), `getTopBottomSecurities` (afpBreakdown), `getYtdByManagerSeries` (per-month, not cumulative).
+- All new colors from existing `managerColor` / `brandColor` / `BUCKET_COLOR` helpers — no raw hex.
+- Custom tooltips render with existing `tooltipStyle` look-and-feel inside a `bg-popover border border-border rounded-md shadow-md p-2 text-xs` container.
+- No changes to other views, routes, data-loader, or shell components.
