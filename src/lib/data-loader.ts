@@ -102,6 +102,7 @@ function normalizeMaster(rows: Raw[]): MasterRow[] {
         NNBF_YTD_USD: ytdNnbf,
         Perf_Month: perfMonth,
         Perf_YTD: perfYtd,
+        Asset_Class: s(r.asset_class),
       };
     });
 }
