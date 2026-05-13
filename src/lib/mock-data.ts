@@ -419,7 +419,6 @@ export function getYtdByManagerSeries(
     }
   }
   const brands = [...totals.entries()].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 6).map(([k]) => k);
-  const cum: Record<string, number> = Object.fromEntries(brands.map((b) => [b, 0]));
   const data = months.map((m) => {
     const row: Record<string, number | string> = { m };
     const monthly: Record<string, number> = Object.fromEntries(brands.map((b) => [b, 0]));
@@ -430,8 +429,7 @@ export function getYtdByManagerSeries(
       monthly[b] += v;
     }
     for (const b of brands) {
-      cum[b] += monthly[b];
-      row[b] = cum[b];
+      row[b] = monthly[b];
     }
     return row;
   });
