@@ -16,6 +16,7 @@ export let PORTFOLIO_TYPES: PortfolioType[] = [];
 export let MANAGERS: Manager[] = [];
 export let CATEGORIES: Category[] = [];
 export let MONTHS: string[] = [];
+export let ASSET_CLASSES: string[] = [];
 
 export interface MasterRow {
   Date: string; // YYYY-MM
@@ -39,6 +40,7 @@ export interface MasterRow {
   NNBF_YTD_USD: number;
   Perf_Month: number;
   Perf_YTD: number;
+  Asset_Class: string;
 }
 
 export interface DisplacementRow {
@@ -74,6 +76,7 @@ export function setLiveData(args: {
   PORTFOLIO_TYPES = distinct(MASTER_DATA.map((r) => r.Portfolio_Type));
   MANAGERS = distinct(MASTER_DATA.map((r) => r.Manager)).sort();
   CATEGORIES = distinct(MASTER_DATA.map((r) => r.Category)).sort();
+  ASSET_CLASSES = distinct(MASTER_DATA.map((r) => r.Asset_Class).filter(Boolean)).sort();
 }
 
 // ---------- Selectors ----------
