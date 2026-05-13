@@ -146,11 +146,27 @@ export function AFPDeepDive() {
     () => getAfpCompositionFlat(afps, treeBucket, treeDim, date),
     [afps, treeBucket, treeDim, date],
   );
-  const donutData = useMemo(
+  const treeTotal = useMemo(
+    () => treeData.reduce((a, d) => a + d.size, 0),
+    [treeData],
+  );
+  const [hoveredLeaf, setHoveredLeaf] = useState<string | null>(null);
+  const aggregateDonut = useMemo(
     () => getAfpCompositionDonut(afps, treeBucket, treeDim, date),
     [afps, treeBucket, treeDim, date],
   );
+  const leafDonut = useMemo(
+    () =>
+      hoveredLeaf
+        ? getAfpCompositionLeafDonut(afps, treeBucket, treeDim, hoveredLeaf, date)
+        : null,
+    [afps, treeBucket, treeDim, hoveredLeaf, date],
+  );
+  const donutData = leafDonut ?? aggregateDonut;
   const donutTotal = donutData.items.reduce((a, d) => a + d.value, 0);
+  const donutTitle = hoveredLeaf
+    ? `${hoveredLeaf} — Top 5 ${donutData.dimension === "Manager" ? "Managers" : "Categories"} + Others`
+    : `Top 5 ${donutData.dimension === "Manager" ? "Managers" : "Categories"} + Others`;
 
   // NNB stacked
   const [nnbBucket, setNnbBucket] = useState<Bucket>("ETF");
