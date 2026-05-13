@@ -413,7 +413,7 @@ export function getYtdByManagerSeries(
   const totals = new Map<string, number>();
   for (const m of months) {
     for (const r of rowsAt(m, f.afps).filter((r) => bucketOf(r) === bucket)) {
-      const v = metric === "NNB" ? r.NNB_USD : (r.NNB_USD * r.Fee_bps) / 10000;
+      const v = metric === "NNB" ? r.NNB_YTD_USD : r.NNBF_YTD_USD;
       const b = brandOf(r);
       totals.set(b, (totals.get(b) ?? 0) + v);
     }
@@ -425,7 +425,7 @@ export function getYtdByManagerSeries(
     for (const r of rowsAt(m, f.afps).filter((r) => bucketOf(r) === bucket)) {
       const b = brandOf(r);
       if (!brands.includes(b)) continue;
-      const v = metric === "NNB" ? r.NNB_USD : (r.NNB_USD * r.Fee_bps) / 10000;
+      const v = metric === "NNB" ? r.NNB_YTD_USD : r.NNBF_YTD_USD;
       monthly[b] += v;
     }
     for (const b of brands) {
