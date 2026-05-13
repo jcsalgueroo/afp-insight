@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Check, ChevronDown, Menu } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Switch } from "@/components/ui/switch";
 import { useDashboard } from "@/lib/dashboard-store";
 import { MONTHS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
@@ -16,7 +15,7 @@ function formatMonth(m: string) {
 }
 
 export function TopNav() {
-  const { date, setDate, blkOnly, setBlkOnly } = useDashboard();
+  const { date, setDate } = useDashboard();
   const [navOpen, setNavOpen] = useState(false);
 
   return (
@@ -74,14 +73,6 @@ export function TopNav() {
         </PopoverContent>
       </Popover>
 
-      {/* BLK Only toggle */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs uppercase tracking-wide text-white/60 whitespace-nowrap">
-          <span className="hidden sm:inline">BlackRock Only</span>
-          <span className="sm:hidden">BLK</span>
-        </span>
-        <Switch checked={blkOnly} onCheckedChange={setBlkOnly} />
-      </div>
     </header>
   );
 }
