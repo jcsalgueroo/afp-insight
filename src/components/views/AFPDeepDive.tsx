@@ -271,58 +271,64 @@ export function AFPDeepDive() {
           </>
         }
       >
-        <div className="h-80 relative group">
-          <ResponsiveContainer width="100%" height="100%">
-            <Treemap
-              data={treeData}
-              dataKey="size"
-              stroke="#fff"
-              content={<FlatNode />}
-              isAnimationActive={false}
-            />
-          </ResponsiveContainer>
+        <div className="h-80 relative">
+          <TreemapHoverContext.Provider value={{ total: treeTotal, setHovered: setHoveredLeaf }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <Treemap
+                data={treeData}
+                dataKey="size"
+                stroke="#fff"
+                content={<FlatNode />}
+                isAnimationActive={false}
+              />
+            </ResponsiveContainer>
+          </TreemapHoverContext.Provider>
           {/* Hover donut overlay */}
-          <div className="pointer-events-none absolute top-3 right-3 w-56 h-56 rounded-md bg-card/95 border border-border shadow-lg p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-1 pb-1">
-              Top 5 {donutData.dimension === "Manager" ? "Managers" : "Categories"} + Others
-            </div>
-            <div className="relative w-full h-[calc(100%-1.25rem)]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={donutData.items}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={36}
-                    outerRadius={64}
-                    paddingAngle={1}
-                    isAnimationActive={false}
-                  >
-                    {donutData.items.map((d) => (
-                      <Cell key={d.name} fill={d.fill} stroke="#fff" />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex items-center justify-center flex-col">
-                <span className="text-[9px] uppercase tracking-wider text-muted-foreground">Total</span>
-                <span className="text-[11px] font-semibold tabular-nums">{formatUSD(donutTotal)}</span>
+          {hoveredLeaf && donutData.items.length > 0 && (
+            <div className="pointer-events-none absolute top-3 right-3 w-72 max-w-[calc(100%-1.5rem)] rounded-md bg-card/95 border border-border shadow-lg p-2.5">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground pb-1.5 truncate">
+                {donutTitle}
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="relative w-28 h-28 shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={donutData.items}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={28}
+                        outerRadius={54}
+                        paddingAngle={1}
+                        isAnimationActive={false}
+                      >
+                        {donutData.items.map((d) => (
+                          <Cell key={d.name} fill={d.fill} stroke="#fff" />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex items-center justify-center flex-col">
+                    <span className="text-[9px] uppercase tracking-wider text-muted-foreground">Total</span>
+                    <span className="text-[10px] font-semibold tabular-nums">{formatUSD(donutTotal)}</span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col gap-0.5 text-[10px]">
+                  {donutData.items.map((d) => (
+                    <div key={d.name} className="flex items-center gap-1.5">
+                      <span className="inline-block w-2 h-2 rounded-sm shrink-0" style={{ background: d.fill }} />
+                      <span className="truncate">{d.name}</span>
+                      <span className="ml-auto tabular-nums text-muted-foreground shrink-0">
+                        {formatPct(donutTotal ? d.value / donutTotal : 0, 0)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-            <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px]">
-              {donutData.items.map((d) => (
-                <div key={d.name} className="flex items-center gap-1 truncate">
-                  <span className="inline-block w-2 h-2 rounded-sm shrink-0" style={{ background: d.fill }} />
-                  <span className="truncate">{d.name}</span>
-                  <span className="ml-auto tabular-nums text-muted-foreground">
-                    {formatPct(donutTotal ? d.value / donutTotal : 0, 0)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
       </CardShell>
 
