@@ -1,56 +1,42 @@
-## AFP Deep Dive — Restructure
+## AFP Deep Dive — Tooltip & Treemap polish
 
-### 1. Portfolio Composition (treemap)
-- Replace nested Manager→Category treemap with a single-level treemap.
-- Add new toggle `By Manager | By Category` next to the existing ETF/MF/MM toggle.
-- Leaves:
-  - **By Manager** mode: one rectangle per manager (Top 5 + Others), sized by AUM in scope.
-  - **By Category** mode: one rectangle per category, sized by AUM in scope.
-- Coloring: managers use `managerColor`; categories use `categoryColor`. Drop the "muted red dominant" logic.
-- Hover: when the user hovers the chart card, show a small donut overlay (top-right of the chart area) containing the **opposite** dimension's Top 5 + Others, filtered by the current ETF/MF/MM toggle:
-  - In **By Manager** mode → donut of Top 5 Categories + Others.
-  - In **By Category** mode → donut of Top 5 Managers + Others.
-- Add data selector `getAfpCompositionFlat(afps, bucket, dimension, date)` and `getAfpCompositionDonut(afps, bucket, dimension, date)` in `mock-data.ts`.
+### 1. Treemap leaves: show weight % in bottom-right
+In `FlatNode` (the custom Treemap content):
+- Receive the leaf's `size` and the total of all leaves to compute `weight = size / total`. Pass `total` via a closure (compute once from `treeData`) or via the node's `root` prop that Recharts injects.
+- Render a second `<text>` anchored bottom-right of the rect (`x + width - 6`, `y + height - 6`, `textAnchor="end"`) with the formatted percentage (e.g. `12.4%`).
+- Only render the percentage when the leaf is large enough to fit it — gate on `width > 40 && height > 28` (separate from the existing name-label gate). Very small leaves stay clean.
+- Keep the existing name label rule (`width > 60 && height > 24`) unchanged.
 
-### 2. NNB by Manager — diverging stacked bar
-- Switch the chart from a single-sided stacked bar to a **diverging horizontal stacked bar**:
-  - Each manager row has a positive stack (right of zero) for categories with NNB > 0 and a negative stack (left of zero) for categories with NNB < 0.
-  - Implementation: split each category series into `{Cat}__pos` and `{Cat}__neg` keyed Bars on stackIds `pos` / `neg`; legend shows one entry per category (color = `categoryColor`).
-  - X-axis centered on 0; reference line at 0.
-- Custom Tooltip on bar hover:
-  - Header: manager name + **net NNB** (signed, formatted USD) for the current period (Month/YTD).
-  - Body: category breakdown rows sorted by `|value|` desc, each row showing color swatch, category, signed USD; positive in default color, negative in `text-negative`.
-- Reuse existing selector output but compute net + sorted breakdown in the tooltip component.
+### 2. Treemap hover card: per-leaf, not card-wide
+Today the donut overlay uses `group-hover` on the whole card and always shows the same Top-5-of-opposite-dimension donut. Change to a hover-driven, leaf-specific panel:
+- Track `hoveredLeaf` state in `AFPDeepDive` (the leaf's `name` + `key`). Set it from `onMouseEnter` / `onMouseLeave` handlers added to the `<rect>` inside `FlatNode` (pass setter via context or props).
+- Hide the panel when `hoveredLeaf == null` (replace the `group-hover:opacity-100` mechanism).
+- Compute a leaf-scoped donut:
+  - **By Manager mode** → hovered leaf is a manager. Donut shows that manager's Top-5 categories + Others (weights within that manager's AUM in the current bucket / AFP scope).
+  - **By Category mode** → hovered leaf is a category. Donut shows that category's Top-5 managers + Others.
+- Add a new selector `getAfpCompositionLeafDonut(afps, bucket, dimension, leafName, date)` in `mock-data.ts` that returns `{ items: {name,value,fill}[], title: string }`. Reuse the existing aggregation pipeline; just filter to the hovered manager or category before grouping the opposite dimension.
+- Panel header changes to `"<Leaf name> — Top 5 <opposite> + Others"`.
 
-### 3. Displacement Opportunities — grouped & collapsible
-- Group rows hierarchically: **Asset Class → Category → rows**.
-- Asset Class derived per opportunity by mapping `Category` to `Asset_Class` via the existing `categoryAssetClass` map (Equity / Fixed Income / Money Market / Other).
-- Rendering:
-  - Asset Class header row (with row count + total competitor AUM); click to expand/collapse.
-  - When expanded, show Category sub-headers (with row count + total AUM); click to expand/collapse.
-  - All groups **collapsed by default**.
-  - Independent expansion (multiple groups can be open at once); state held in two `Set<string>` in component state.
-- Match filter remains in header.
+### 3. Donut + legend fit inside the card
+Current panel is `w-56 h-56` with the donut taking ~80% and the legend grid at the bottom — the legend overflows when there are 6 rows of long names. Restructure the panel so donut and legend both fit:
+- Widen and reshape the panel to a horizontal layout: `w-72` (or `w-80`) and `h-auto` with `max-h` cap, so it scales to the legend rather than clipping.
+- Inside: small header row, then a flex row → left: donut `w-28 h-28` (fixed), right: legend as a vertical list (`flex-col`, single column) with `truncate` on the name and `tabular-nums` on the percent. This ensures every legend row is fully visible.
+- Keep total label centered inside the donut; reduce font sizes accordingly.
+- Ensure the panel still uses `pointer-events-none` and stays positioned `absolute top-3 right-3`, but switch to `max-w-[calc(100%-1.5rem)]` to never exceed the chart area.
 
-### 4. Positions table — Asset Class toggle + grouped collapse
-- Add `Equity | Fixed Income | Money Market | All` toggle in the header (alongside existing Bucket, Portfolio, Search).
-- Filter `positions` by selected asset class (mapping via `categoryAssetClass`).
-- Replace flat per-category rows with a collapsible grouping:
-  - Default view: **only category header rows visible** (category name, total AUM, count, % of portfolio).
-  - Click a category header to expand and reveal the product rows beneath it.
-  - Independent expansion; state in `Set<Category>`.
-- Search behavior: when a search term is active, auto-expand any category that has matches.
+### 4. NNB tooltip — sort by signed value, not absolute
+In `NnbTooltip` (`AFPDeepDive.tsx` ~line 670):
+- Replace `.sort((a, b) => Math.abs(b.value) - Math.abs(a.value))` with a signed sort that lists all positive flows first (largest positive on top, descending) followed by all negative flows (largest in magnitude first, i.e. most negative last or first within the negatives — see below).
+- Concrete order: `positives desc by value, then negatives desc by value` (so the breakdown reads `+$120M, +$40M, +$5M, −$8M, −$60M`). This puts positives first, sorted largest-to-smallest, then negatives sorted from least-negative to most-negative.
+- Implementation: split into `pos = items.filter(v>0).sort((a,b)=>b.value-a.value)` and `neg = items.filter(v<0).sort((a,b)=>b.value-a.value)`, then concat.
+- Net total header and color logic stay as-is.
 
 ### Technical notes
-- All changes confined to `src/components/views/AFPDeepDive.tsx` and additive selectors/types in `src/lib/mock-data.ts`.
-- New helpers in `mock-data.ts`:
-  - `getAfpCompositionFlat(afps, bucket, dimension, date)` → `{ key, name, size, fill }[]`
-  - `getAfpCompositionDonut(afps, bucket, dimension, date)` → top-5 + Others list of opposite dimension
-  - `categoryAssetClass(category)` helper if not already exported
-- Diverging bar: pre-split each category into `pos`/`neg` keys at the selector level so Recharts stack ids work cleanly; legend filters duplicates.
-- Hover donut on the composition card: small absolute-positioned panel (e.g. `w-48 h-48`) revealed via card `group-hover` Tailwind state, rendered with a `PieChart`.
-- No design token or layout-system changes.
+- All UI changes confined to `src/components/views/AFPDeepDive.tsx`.
+- One additive selector in `src/lib/mock-data.ts`: `getAfpCompositionLeafDonut(...)`.
+- For passing `hoveredLeaf` setter into `FlatNode`, simplest is a tiny module-scope React context (`TreemapHoverContext`) created in this file and consumed by `FlatNode`; avoids prop-drilling through Recharts' `content` prop.
+- No design tokens / layout system changes.
 
 ### Out of scope
-- Other views (Scorecard, Flows, etc.) untouched.
-- No data model changes beyond reading existing `Asset_Class` / category mapping.
+- All other charts and views.
+- Data model / mock dataset changes.

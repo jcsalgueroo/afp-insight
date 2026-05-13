@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, createContext, useContext, useMemo, useState } from "react";
 import {
   Treemap,
   ResponsiveContainer,
@@ -28,6 +28,7 @@ import {
   formatUSD,
   getAfpCompositionFlat,
   getAfpCompositionDonut,
+  getAfpCompositionLeafDonut,
   getAfpPositions,
   getDisplacement,
   getNnbByManagerStacked,
@@ -145,11 +146,27 @@ export function AFPDeepDive() {
     () => getAfpCompositionFlat(afps, treeBucket, treeDim, date),
     [afps, treeBucket, treeDim, date],
   );
-  const donutData = useMemo(
+  const treeTotal = useMemo(
+    () => treeData.reduce((a, d) => a + d.size, 0),
+    [treeData],
+  );
+  const [hoveredLeaf, setHoveredLeaf] = useState<string | null>(null);
+  const aggregateDonut = useMemo(
     () => getAfpCompositionDonut(afps, treeBucket, treeDim, date),
     [afps, treeBucket, treeDim, date],
   );
+  const leafDonut = useMemo(
+    () =>
+      hoveredLeaf
+        ? getAfpCompositionLeafDonut(afps, treeBucket, treeDim, hoveredLeaf, date)
+        : null,
+    [afps, treeBucket, treeDim, hoveredLeaf, date],
+  );
+  const donutData = leafDonut ?? aggregateDonut;
   const donutTotal = donutData.items.reduce((a, d) => a + d.value, 0);
+  const donutTitle = hoveredLeaf
+    ? `${hoveredLeaf} — Top 5 ${donutData.dimension === "Manager" ? "Managers" : "Categories"} + Others`
+    : `Top 5 ${donutData.dimension === "Manager" ? "Managers" : "Categories"} + Others`;
 
   // NNB stacked
   const [nnbBucket, setNnbBucket] = useState<Bucket>("ETF");
@@ -254,58 +271,64 @@ export function AFPDeepDive() {
           </>
         }
       >
-        <div className="h-80 relative group">
-          <ResponsiveContainer width="100%" height="100%">
-            <Treemap
-              data={treeData}
-              dataKey="size"
-              stroke="#fff"
-              content={<FlatNode />}
-              isAnimationActive={false}
-            />
-          </ResponsiveContainer>
+        <div className="h-80 relative">
+          <TreemapHoverContext.Provider value={{ total: treeTotal, setHovered: setHoveredLeaf }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <Treemap
+                data={treeData}
+                dataKey="size"
+                stroke="#fff"
+                content={<FlatNode />}
+                isAnimationActive={false}
+              />
+            </ResponsiveContainer>
+          </TreemapHoverContext.Provider>
           {/* Hover donut overlay */}
-          <div className="pointer-events-none absolute top-3 right-3 w-56 h-56 rounded-md bg-card/95 border border-border shadow-lg p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-1 pb-1">
-              Top 5 {donutData.dimension === "Manager" ? "Managers" : "Categories"} + Others
-            </div>
-            <div className="relative w-full h-[calc(100%-1.25rem)]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={donutData.items}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={36}
-                    outerRadius={64}
-                    paddingAngle={1}
-                    isAnimationActive={false}
-                  >
-                    {donutData.items.map((d) => (
-                      <Cell key={d.name} fill={d.fill} stroke="#fff" />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex items-center justify-center flex-col">
-                <span className="text-[9px] uppercase tracking-wider text-muted-foreground">Total</span>
-                <span className="text-[11px] font-semibold tabular-nums">{formatUSD(donutTotal)}</span>
+          {hoveredLeaf && donutData.items.length > 0 && (
+            <div className="pointer-events-none absolute top-3 right-3 w-72 max-w-[calc(100%-1.5rem)] rounded-md bg-card/95 border border-border shadow-lg p-2.5">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground pb-1.5 truncate">
+                {donutTitle}
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="relative w-28 h-28 shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={donutData.items}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={28}
+                        outerRadius={54}
+                        paddingAngle={1}
+                        isAnimationActive={false}
+                      >
+                        {donutData.items.map((d) => (
+                          <Cell key={d.name} fill={d.fill} stroke="#fff" />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex items-center justify-center flex-col">
+                    <span className="text-[9px] uppercase tracking-wider text-muted-foreground">Total</span>
+                    <span className="text-[10px] font-semibold tabular-nums">{formatUSD(donutTotal)}</span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col gap-0.5 text-[10px]">
+                  {donutData.items.map((d) => (
+                    <div key={d.name} className="flex items-center gap-1.5">
+                      <span className="inline-block w-2 h-2 rounded-sm shrink-0" style={{ background: d.fill }} />
+                      <span className="truncate">{d.name}</span>
+                      <span className="ml-auto tabular-nums text-muted-foreground shrink-0">
+                        {formatPct(donutTotal ? d.value / donutTotal : 0, 0)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-            <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px]">
-              {donutData.items.map((d) => (
-                <div key={d.name} className="flex items-center gap-1 truncate">
-                  <span className="inline-block w-2 h-2 rounded-sm shrink-0" style={{ background: d.fill }} />
-                  <span className="truncate">{d.name}</span>
-                  <span className="ml-auto tabular-nums text-muted-foreground">
-                    {formatPct(donutTotal ? d.value / donutTotal : 0, 0)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
       </CardShell>
 
@@ -595,17 +618,40 @@ interface FlatNodeProps {
   name?: string;
   fill?: string;
   depth?: number;
+  size?: number;
 }
 
+const TreemapHoverContext = createContext<{
+  total: number;
+  setHovered: (n: string | null) => void;
+}>({ total: 0, setHovered: () => {} });
+
 function FlatNode(props: FlatNodeProps) {
-  const { x = 0, y = 0, width = 0, height = 0, name, fill = CHART_COLORS.competitor, depth } = props;
+  const { x = 0, y = 0, width = 0, height = 0, name, fill = CHART_COLORS.competitor, depth, size = 0 } = props;
+  const { total, setHovered } = useContext(TreemapHoverContext);
   if (depth === 0) return null;
+  const pct = total > 0 ? size / total : 0;
   return (
-    <g>
+    <g
+      onMouseEnter={() => name && setHovered(name)}
+      onMouseLeave={() => setHovered(null)}
+    >
       <rect x={x} y={y} width={width} height={height} fill={fill} stroke="#fff" strokeWidth={1.5} />
       {width > 60 && height > 24 && (
         <text x={x + 6} y={y + 16} fill="#fff" fontSize={11} fontWeight={500}>
           {name}
+        </text>
+      )}
+      {width > 40 && height > 28 && (
+        <text
+          x={x + width - 6}
+          y={y + height - 6}
+          fill="#fff"
+          fontSize={10}
+          fontWeight={600}
+          textAnchor="end"
+        >
+          {formatPct(pct, pct < 0.1 ? 1 : 0)}
         </text>
       )}
     </g>
@@ -667,14 +713,16 @@ function NnbTooltip({ active, payload, categories }: NnbTooltipProps) {
   const row = payload[0]?.payload;
   if (!row) return null;
   const manager = String(row.Manager ?? "");
-  const breakdown = categories
+  const all = categories
     .map((c) => {
       const pos = (row[`${c}__pos`] as number) ?? 0;
       const neg = (row[`${c}__neg`] as number) ?? 0;
       return { category: c, value: pos + neg };
     })
-    .filter((x) => x.value !== 0)
-    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+    .filter((x) => x.value !== 0);
+  const positives = all.filter((x) => x.value > 0).sort((a, b) => b.value - a.value);
+  const negatives = all.filter((x) => x.value < 0).sort((a, b) => b.value - a.value);
+  const breakdown = [...positives, ...negatives];
   const net = breakdown.reduce((a, b) => a + b.value, 0);
   return (
     <div className="bg-card border border-border rounded-sm shadow-md p-2.5 text-xs min-w-[220px]">
