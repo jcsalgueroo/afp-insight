@@ -786,6 +786,85 @@ export function categoryColor(c: Category) {
   return CATEGORY_PALETTE[(idx >= 0 ? idx : 0) % CATEGORY_PALETTE.length];
 }
 
+/** Derive an Asset Class label for a Category by sampling MASTER_DATA. */
+const _categoryAssetClassCache = new Map<Category, string>();
+export function categoryAssetClass(cat: Category): string {
+  if (cat === "Money Market") return "Money Market";
+  const cached = _categoryAssetClassCache.get(cat);
+  if (cached) return cached;
+  const row = MASTER_DATA.find((r) => r.Category === cat && r.Asset_Class);
+  const ac = row?.Asset_Class || "Other";
+  _categoryAssetClassCache.set(cat, ac);
+  return ac;
+}
+
+/** Look up Category for a security ISIN (used to derive category for displacement rows). */
+export function categoryOfIsin(isin: string): Category | "" {
+  const row = MASTER_DATA.find((r) => r.ISIN === isin);
+  return row?.Category ?? "";
+}
+
+/** Flat single-level composition: leaves are managers OR categories. */
+export function getAfpCompositionFlat(
+  afps: AFP[],
+  bucket: Bucket,
+  dimension: "Manager" | "Category",
+  monthDate: string,
+) {
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      r.Date === monthDate &&
+      (afps.length === 0 || afps.includes(r.AFP)) &&
+      bucketOf(r) === bucket,
+  );
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const key = dimension === "Manager" ? r.Manager : r.Category;
+    map.set(key, (map.get(key) ?? 0) + r.AUM_USD);
+  }
+  const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
+  return sorted.map(([name, size]) => ({
+    name,
+    size,
+    fill:
+      dimension === "Manager"
+        ? managerColor(name as Manager)
+        : categoryColor(name as Category),
+  }));
+}
+
+/** Top 5 + Others in the OPPOSITE dimension of the treemap, for the hover donut. */
+export function getAfpCompositionDonut(
+  afps: AFP[],
+  bucket: Bucket,
+  dimension: "Manager" | "Category",
+  monthDate: string,
+) {
+  // Opposite dimension
+  const opp: "Manager" | "Category" = dimension === "Manager" ? "Category" : "Manager";
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      r.Date === monthDate &&
+      (afps.length === 0 || afps.includes(r.AFP)) &&
+      bucketOf(r) === bucket,
+  );
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const k = opp === "Manager" ? r.Manager : r.Category;
+    map.set(k, (map.get(k) ?? 0) + r.AUM_USD);
+  }
+  const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, 5);
+  const rest = sorted.slice(5).reduce((a, [, v]) => a + v, 0);
+  const out = top.map(([name, value]) => ({
+    name,
+    value,
+    fill: opp === "Manager" ? managerColor(name as Manager) : categoryColor(name as Category),
+  }));
+  if (rest > 0) out.push({ name: "Others", value: rest, fill: CHART_COLORS.competitor });
+  return { items: out, dimension: opp };
+}
+
 /**
  * Find the canonical ticker for a security ISIN. Returns the live `Ticker`
  * field if present (ETFs), or empty string for MFs / MMs.
