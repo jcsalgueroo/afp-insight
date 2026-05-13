@@ -12,31 +12,31 @@ import {
   PieChart,
   Pie,
   Cell,
+  ReferenceLine,
 } from "recharts";
-import { Check, ChevronDown, Filter, Search } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Filter, Search } from "lucide-react";
 import {
   AFPS,
-  CATEGORIES,
   CHART_COLORS,
   MATCH_TYPES,
   PORTFOLIO_TYPES,
-  brandColor,
   categoryColor,
+  categoryAssetClass,
+  categoryOfIsin,
   formatBps,
   formatPct,
   formatUSD,
-  getAFPCompositionTree,
-  getAfpEtfMfDonut,
+  getAfpCompositionFlat,
+  getAfpCompositionDonut,
   getAfpPositions,
   getDisplacement,
   getNnbByManagerStacked,
-  managerColor,
   type AFP,
   type Bucket,
   type Category,
   type MatchType,
-  type Manager,
   type PortfolioType,
+  type DisplacementRow,
 } from "@/lib/mock-data";
 import { useDashboard } from "@/lib/dashboard-store";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +56,19 @@ const PERIOD_TOGGLE = [
   { value: "Month" as const, label: "Month" },
   { value: "YTD" as const, label: "YTD" },
 ] as const;
+
+const DIMENSION_TOGGLE = [
+  { value: "Manager" as const, label: "By Manager" },
+  { value: "Category" as const, label: "By Category" },
+] as const;
+
+const ASSET_CLASS_TOGGLE = [
+  { value: "All" as const, label: "All" },
+  { value: "Equity" as const, label: "Equity" },
+  { value: "Fixed Income" as const, label: "Fixed Income" },
+  { value: "Money Market" as const, label: "MM" },
+] as const;
+type AssetClassFilter = (typeof ASSET_CLASS_TOGGLE)[number]["value"];
 
 const tooltipStyle = { fontSize: 12, border: "1px solid #E5E5E5", borderRadius: 4 } as const;
 
@@ -86,47 +99,7 @@ function CardShell({
   );
 }
 
-function CategoryFilterPopover({
-  value,
-  onChange,
-}: {
-  value: Category[];
-  onChange: (next: Category[]) => void;
-}) {
-  const toggle = (c: Category) =>
-    onChange(value.includes(c) ? value.filter((x) => x !== c) : [...value, c]);
-  return (
-    <Popover>
-      <PopoverTrigger className="flex items-center gap-1.5 text-xs uppercase tracking-wide border border-border px-2.5 py-1 hover:bg-muted rounded-sm">
-        <Filter className="h-3 w-3" />
-        <span className="text-muted-foreground">Categories:</span>
-        <span className="font-medium text-foreground">
-          {value.length === 0 ? "All" : value.length}
-        </span>
-        <ChevronDown className="h-3 w-3" />
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-56 p-1">
-        <button
-          onClick={() => onChange([])}
-          className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded-sm flex items-center justify-between border-b border-border mb-1"
-        >
-          <span>All Categories</span>
-          {value.length === 0 && <Check className="h-3 w-3 text-primary" />}
-        </button>
-        {CATEGORIES.map((c) => (
-          <button
-            key={c}
-            onClick={() => toggle(c)}
-            className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded-sm flex items-center justify-between"
-          >
-            <span>{c}</span>
-            {value.includes(c) && <Check className="h-3 w-3 text-primary" />}
-          </button>
-        ))}
-      </PopoverContent>
-    </Popover>
-  );
-}
+// (CategoryFilterPopover removed — donut overlay derives from current treemap scope)
 
 function PortfolioPicker({
   value,
