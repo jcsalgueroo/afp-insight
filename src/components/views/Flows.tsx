@@ -564,7 +564,7 @@ export function Flows() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <CardShell
           title="YTD NNB by Manager"
-          subtitle="Monthly NNB stacked by manager (signed)"
+          subtitle="YTD NNB per month, stacked by manager (signed)"
           right={
             <>
               <SegmentedToggle options={BUCKET_TOGGLE} value={nnbBucket} onChange={setNnbBucket} />
@@ -601,7 +601,7 @@ export function Flows() {
 
         <CardShell
           title="YTD NNBF by Manager"
-          subtitle="Monthly NNBF stacked by manager (signed)"
+          subtitle="YTD NNBF per month, stacked by manager (signed)"
           right={
             <>
               <SegmentedToggle options={BUCKET_TOGGLE} value={nnbfBucket} onChange={setNnbfBucket} />
