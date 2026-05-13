@@ -29,7 +29,7 @@ import {
   getCategoryFlowBubbles,
   getCumulativeNnbStacked,
   getMonthlyBucketFlows,
-  getNnbDonut,
+  getNnbByManager,
   getScatterFiltered,
   getTopBottomSecurities,
   getYtdByManagerSeries,
