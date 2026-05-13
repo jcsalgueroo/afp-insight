@@ -2,12 +2,13 @@ import { useMemo, useState } from "react";
 import {
   AreaChart,
   Area,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
   PieChart,
   Pie,
   Cell,
-  ScatterChart,
-  Scatter,
-  ZAxis,
   XAxis,
   YAxis,
   Tooltip,
@@ -33,12 +34,20 @@ import {
   formatUSD,
   getAumOrgByBucketSeries,
   getBrandKpis,
-  getCategoryWeightBubbles,
+  getCategoryWeightBars,
   getCategoryCompositionSeries,
   getKPIs,
+  getManagerAfpBreakdown,
+  getMonthlyNnbByBucketSeries,
+  getOthersManagerBreakdown,
   getTopManagersPie,
+  getTopManagersShareSeries,
+  shadeGreen,
+  shadeGrey,
   type AFP,
+  type AssetClassFilter,
   type Bucket,
+  type BucketFilter,
 } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
@@ -49,8 +58,15 @@ const BUCKET_TOGGLE = [
 ] as const;
 
 const WEIGHTS_BUCKET_TOGGLE = [
-  { value: "ETF" as Bucket, label: "ETF" },
-  { value: "Mutual Fund" as Bucket, label: "MF" },
+  { value: "ETF" as BucketFilter, label: "ETF" },
+  { value: "Mutual Fund" as BucketFilter, label: "MF" },
+  { value: "All" as BucketFilter, label: "All" },
+] as const;
+
+const ASSET_CLASS_TOGGLE = [
+  { value: "Equity" as AssetClassFilter, label: "Equity" },
+  { value: "Fixed Income" as AssetClassFilter, label: "FI" },
+  { value: "All" as AssetClassFilter, label: "All" },
 ] as const;
 
 const METRIC_TOGGLE = [
@@ -60,7 +76,7 @@ const METRIC_TOGGLE = [
 
 function shortMonth(m: string) {
   const [y, mo] = m.split("-");
-  return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString("en-US", { month: "short" });
+  return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
 }
 
 function CardShell({
@@ -116,31 +132,135 @@ function AfpSinglePicker({ value, onChange }: { value: AFP; onChange: (a: AFP) =
 
 const tooltipStyle = { fontSize: 12, border: "1px solid #E5E5E5", borderRadius: 4 } as const;
 
+// Custom tooltip for Category Weights bar chart
+function CategoryWeightTooltip({
+  active,
+  payload,
+  bubbleAfp,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: { category: string; aggWeight: number; afpWeight: number; aggBlkShare: number; afpBlkShare: number } }>;
+  bubbleAfp: AFP;
+}) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="bg-popover border border-border rounded-md shadow-md p-3 text-xs min-w-[220px]">
+      <div className="font-semibold text-sm mb-2">{d.category}</div>
+      <div className="grid grid-cols-3 gap-x-3 gap-y-1">
+        <div className="text-muted-foreground"></div>
+        <div className="text-muted-foreground text-right">Weight</div>
+        <div className="text-muted-foreground text-right">BLK share</div>
+
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: shadeGrey(d.aggBlkShare) }} />
+          System
+        </div>
+        <div className="text-right font-medium">{d.aggWeight.toFixed(1)}%</div>
+        <div className="text-right font-medium">{(d.aggBlkShare * 100).toFixed(1)}%</div>
+
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: shadeGreen(d.afpBlkShare) }} />
+          {bubbleAfp}
+        </div>
+        <div className="text-right font-medium">{d.afpWeight.toFixed(1)}%</div>
+        <div className="text-right font-medium">{(d.afpBlkShare * 100).toFixed(1)}%</div>
+      </div>
+    </div>
+  );
+}
+
+// Custom tooltip for Top 5 Managers donut
+function TopManagersTooltip({
+  active,
+  payload,
+  filters,
+  bucket,
+}: {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; payload: { name: string; value: number } }>;
+  filters: { date: string; afps: AFP[]; blkOnly: boolean };
+  bucket: Bucket;
+}) {
+  if (!active || !payload?.length) return null;
+  const slice = payload[0].payload;
+  const isOthers = slice.name === "Others";
+  const breakdown = isOthers
+    ? getOthersManagerBreakdown(filters, bucket).map((r) => ({ label: r.Manager, AUM: r.AUM }))
+    : getManagerAfpBreakdown(filters, slice.name, bucket).map((r) => ({ label: r.AFP, AUM: r.AUM }));
+  const total = slice.value;
+  return (
+    <div className="bg-popover border border-border rounded-md shadow-md p-3 text-xs min-w-[240px] max-w-[300px]">
+      <div className="font-semibold text-sm mb-1">{slice.name}</div>
+      <div className="text-muted-foreground mb-2">
+        AUM Org: <span className="font-medium text-foreground">{formatUSD(total)}</span>
+      </div>
+      <div className="text-muted-foreground text-[10px] uppercase tracking-wide mb-1">
+        {isOthers ? "Managers in Others" : "Breakdown by AFP"}
+      </div>
+      <div className="space-y-0.5 max-h-48 overflow-auto">
+        {breakdown.map((b) => (
+          <div key={b.label} className="flex items-center justify-between gap-2">
+            <span className="truncate">{b.label}</span>
+            <span className="font-medium tabular-nums">
+              {formatUSD(b.AUM)}{" "}
+              <span className="text-muted-foreground">
+                ({total ? ((b.AUM / total) * 100).toFixed(0) : 0}%)
+              </span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Scorecard() {
-  const { date, blkOnly } = useDashboard();
+  const { date } = useDashboard();
   const afps: AFP[] = [];
-  const filters = { date, afps, blkOnly };
+  const filters = { date, afps, blkOnly: false };
   const k = getKPIs(filters);
   const bk = getBrandKpis({ ...filters, blkOnly: false });
 
-  // Local state per chart
+  // AUM / Monthly NNB chart
   const [aumLocalAfps, setAumLocalAfps] = useState<AFP[]>([]);
   const [aumMetric, setAumMetric] = useState<"AUM_USD" | "NNB_USD">("AUM_USD");
 
+  // Top 5 donut
   const [pieBucket, setPieBucket] = useState<Bucket>("ETF");
-  const [bubbleAfp, setBubbleAfp] = useState<AFP>(AFPS[0]);
-  const [weightsBucket, setWeightsBucket] = useState<Bucket>("ETF");
 
+  // Category weights bar chart
+  const [bubbleAfp, setBubbleAfp] = useState<AFP>(AFPS[0]);
+  const [weightsBucket, setWeightsBucket] = useState<BucketFilter>("ETF");
+  const [weightsAssetClass, setWeightsAssetClass] = useState<AssetClassFilter>("Equity");
+
+  // Top 5 + Others share evolution
+  const [shareBucket, setShareBucket] = useState<Bucket>("ETF");
+  const [shareAfps, setShareAfps] = useState<AFP[]>([]);
+
+  // Composition by category
   const [compAfps, setCompAfps] = useState<AFP[]>([]);
 
   const aumSeries = useMemo(
-    () => getAumOrgByBucketSeries(aumLocalAfps, aumMetric),
-    [aumLocalAfps, aumMetric],
+    () => getAumOrgByBucketSeries(aumLocalAfps, "AUM_USD"),
+    [aumLocalAfps],
+  );
+  const nnbBarSeries = useMemo(
+    () => getMonthlyNnbByBucketSeries(aumLocalAfps),
+    [aumLocalAfps],
   );
   const pieData = useMemo(() => getTopManagersPie(filters, pieBucket), [filters, pieBucket]);
-  const bubbles = useMemo(
-    () => getCategoryWeightBubbles({ ...filters, blkOnly: false }, bubbleAfp, weightsBucket),
-    [filters, bubbleAfp, weightsBucket],
+  const bars = useMemo(
+    () =>
+      getCategoryWeightBars({ ...filters, blkOnly: false }, bubbleAfp, {
+        bucket: weightsBucket,
+        assetClass: weightsAssetClass,
+      }),
+    [filters, bubbleAfp, weightsBucket, weightsAssetClass],
+  );
+  const shareSeries = useMemo(
+    () => getTopManagersShareSeries(shareAfps, shareBucket),
+    [shareAfps, shareBucket],
   );
   const etfComp = useMemo(() => getCategoryCompositionSeries(compAfps, "ETF"), [compAfps]);
   const mfComp = useMemo(() => getCategoryCompositionSeries(compAfps, "Mutual Fund"), [compAfps]);
@@ -174,74 +294,102 @@ export function Scorecard() {
         />
       </div>
 
-      {/* Category Weights — prominent, full width */}
+      {/* Category Weights — grouped bar chart */}
       <CardShell
         title="Category Weights — AFP vs System"
-        subtitle={`Bubble size = (iShares + BlackRock) share within Category — ${weightsBucket}`}
+        subtitle="Bar shade intensity = BlackRock share within each category (0–100%)"
         right={
           <>
             <SegmentedToggle options={WEIGHTS_BUCKET_TOGGLE} value={weightsBucket} onChange={setWeightsBucket} />
+            <SegmentedToggle options={ASSET_CLASS_TOGGLE} value={weightsAssetClass} onChange={setWeightsAssetClass} />
             <AfpSinglePicker value={bubbleAfp} onChange={setBubbleAfp} />
           </>
         }
       >
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 16, right: 16, left: 0, bottom: 8 }}>
-                <CartesianGrid stroke={CHART_COLORS.grid} />
-                <XAxis
-                  type="number"
-                  dataKey="x"
-                  domain={[-0.5, CATEGORIES.length - 0.5]}
-                  ticks={CATEGORIES.map((_, i) => i)}
-                  tickFormatter={(i: number) => CATEGORIES[i] ?? ""}
-                  stroke="#999"
-                  fontSize={10}
-                  interval={0}
-                />
-                <YAxis
-                  type="number"
-                  dataKey="y"
-                  unit="%"
-                  stroke="#999"
-                  fontSize={11}
-                  width={45}
-                />
-                <ZAxis type="number" dataKey="z" range={[60, 600]} />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  cursor={{ strokeDasharray: "3 3" }}
-                  formatter={(v: number, n) => {
-                    if (n === "y") return [`${v.toFixed(1)}%`, "Weight"];
-                    if (n === "z") return [`${v.toFixed(1)}%`, "BLK+iShares share"];
-                    return [v, n];
-                  }}
-                  labelFormatter={() => ""}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Scatter
-                  name="System (Aggregate)"
-                  data={bubbles.map((b) => ({ x: b.idx - 0.18, y: b.aggWeight, z: b.sizeShare, cat: b.category }))}
-                  fill="#B8B8B8"
-                  isAnimationActive={false}
-                />
-                <Scatter
-                  name={bubbleAfp}
-                  data={bubbles.map((b) => ({ x: b.idx + 0.18, y: b.afpWeight, z: b.sizeShare, cat: b.category }))}
-                  fill={CHART_COLORS.blk}
-                  isAnimationActive={false}
-                />
-              </ScatterChart>
-            </ResponsiveContainer>
-          </div>
+        <div className="h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={bars} margin={{ top: 16, right: 16, left: 0, bottom: 8 }}>
+              <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
+              <XAxis dataKey="category" stroke="#999" fontSize={11} interval={0} angle={-15} textAnchor="end" height={50} />
+              <YAxis unit="%" stroke="#999" fontSize={11} width={45} />
+              <Tooltip content={<CategoryWeightTooltip bubbleAfp={bubbleAfp} />} cursor={{ fill: "#00000008" }} />
+              <Legend
+                wrapperStyle={{ fontSize: 11 }}
+                payload={[
+                  { value: "System (Aggregate)", type: "square", color: shadeGrey(0.5) },
+                  { value: bubbleAfp, type: "square", color: shadeGreen(0.5) },
+                ]}
+              />
+              <Bar dataKey="aggWeight" name="System (Aggregate)" isAnimationActive={false}>
+                {bars.map((b) => (
+                  <Cell key={`agg-${b.category}`} fill={shadeGrey(b.aggBlkShare)} />
+                ))}
+              </Bar>
+              <Bar dataKey="afpWeight" name={bubbleAfp} isAnimationActive={false}>
+                {bars.map((b) => (
+                  <Cell key={`afp-${b.category}`} fill={shadeGreen(b.afpBlkShare)} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </CardShell>
 
-      {/* AUM Org evolution + Top 5 Managers donut */}
+      {/* Top 5 + Others — share evolution line chart */}
+      <CardShell
+        title="Top 5 Managers + Others — Market Share Evolution"
+        subtitle="Share of bucket AUM Org over time, sums to 100% per month"
+        right={
+          <>
+            <SegmentedToggle options={BUCKET_TOGGLE} value={shareBucket} onChange={setShareBucket} />
+            <AfpFilterPopover value={shareAfps} onChange={setShareAfps} />
+          </>
+        }
+      >
+        <div className="h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={shareSeries.data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
+              <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
+              <YAxis
+                domain={[0, 100]}
+                tickFormatter={(v: number) => `${v}%`}
+                stroke="#999"
+                fontSize={11}
+                width={45}
+              />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(v: number, n) => [`${v.toFixed(1)}%`, n]}
+                labelFormatter={(l) => shortMonth(l as string)}
+              />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {shareSeries.brands.map((b) => (
+                <Line
+                  key={b}
+                  type="monotone"
+                  dataKey={b}
+                  stroke={brandColor(b)}
+                  strokeWidth={2}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </CardShell>
+
+      {/* AUM Org evolution / Monthly NNB grouped bar + Top 5 Managers donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <CardShell
           className="lg:col-span-2"
-          title={aumMetric === "AUM_USD" ? "AUM Org — Evolution by Asset Type" : "Monthly NNB — Evolution by Asset Type"}
-          subtitle="Trailing 12 months, stacked by ETF / Mutual Fund / Money Market"
+          title={aumMetric === "AUM_USD" ? "AUM Org — Evolution by Asset Type" : "Monthly NNB by Asset Type"}
+          subtitle={
+            aumMetric === "AUM_USD"
+              ? "Stacked area: ETF / Mutual Fund / Money Market"
+              : "Grouped bars per month: ETF / Mutual Fund / Money Market"
+          }
           right={
             <>
               <SegmentedToggle options={METRIC_TOGGLE} value={aumMetric} onChange={setAumMetric} />
@@ -251,29 +399,46 @@ export function Scorecard() {
         >
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={aumSeries} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
-                <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
-                <YAxis tickFormatter={(v) => formatUSD(v)} stroke="#999" fontSize={11} width={70} />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  formatter={(v: number, n) => [formatUSD(v), n]}
-                  labelFormatter={(l) => shortMonth(l as string)}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                {BUCKETS.map((b) => (
-                  <Area
-                    key={b}
-                    type="monotone"
-                    dataKey={b}
-                    stackId="1"
-                    stroke={BUCKET_COLOR[b]}
-                    fill={BUCKET_COLOR[b]}
-                    fillOpacity={0.8}
-                    isAnimationActive={false}
+              {aumMetric === "AUM_USD" ? (
+                <AreaChart data={aumSeries} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
+                  <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
+                  <YAxis tickFormatter={(v) => formatUSD(v)} stroke="#999" fontSize={11} width={70} />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(v: number, n) => [formatUSD(v), n]}
+                    labelFormatter={(l) => shortMonth(l as string)}
                   />
-                ))}
-              </AreaChart>
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {BUCKETS.map((b) => (
+                    <Area
+                      key={b}
+                      type="monotone"
+                      dataKey={b}
+                      stackId="1"
+                      stroke={BUCKET_COLOR[b]}
+                      fill={BUCKET_COLOR[b]}
+                      fillOpacity={0.8}
+                      isAnimationActive={false}
+                    />
+                  ))}
+                </AreaChart>
+              ) : (
+                <BarChart data={nnbBarSeries} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
+                  <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
+                  <YAxis tickFormatter={(v) => formatUSD(v)} stroke="#999" fontSize={11} width={70} />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(v: number, n) => [formatUSD(v), n]}
+                    labelFormatter={(l) => shortMonth(l as string)}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {BUCKETS.map((b) => (
+                    <Bar key={b} dataKey={b} fill={BUCKET_COLOR[b]} isAnimationActive={false} />
+                  ))}
+                </BarChart>
+              )}
             </ResponsiveContainer>
           </div>
         </CardShell>
@@ -286,10 +451,7 @@ export function Scorecard() {
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  formatter={(v: number, n) => [formatUSD(v), n]}
-                />
+                <Tooltip content={<TopManagersTooltip filters={filters} bucket={pieBucket} />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Pie
                   data={pieData}
@@ -314,8 +476,7 @@ export function Scorecard() {
         </CardShell>
       </div>
 
-      {/* YTD NNB + NNBF area charts */}
-      {/* AUM Org composition by Category — ETF & MF */}
+      {/* AUM Org composition by Category — 100% stacked bar (one per month) */}
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           AUM Org Composition by Category
@@ -327,10 +488,10 @@ export function Scorecard() {
           { title: "ETF — Composition by Category", series: etfComp },
           { title: "Mutual Fund — Composition by Category", series: mfComp },
         ] as const).map((card) => (
-          <CardShell key={card.title} title={card.title} subtitle="100% stacked share of AUM Org over time">
+          <CardShell key={card.title} title={card.title} subtitle="100% stacked bar per month">
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={card.series.data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <BarChart data={card.series.data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
                   <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
                   <YAxis
@@ -350,18 +511,15 @@ export function Scorecard() {
                   />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   {card.series.categories.map((c) => (
-                    <Area
+                    <Bar
                       key={c}
-                      type="monotone"
                       dataKey={c}
                       stackId="1"
-                      stroke={categoryColor(c)}
                       fill={categoryColor(c)}
-                      fillOpacity={0.8}
                       isAnimationActive={false}
                     />
                   ))}
-                </AreaChart>
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </CardShell>

@@ -16,6 +16,7 @@ export let PORTFOLIO_TYPES: PortfolioType[] = [];
 export let MANAGERS: Manager[] = [];
 export let CATEGORIES: Category[] = [];
 export let MONTHS: string[] = [];
+export let ASSET_CLASSES: string[] = [];
 
 export interface MasterRow {
   Date: string; // YYYY-MM
@@ -39,6 +40,7 @@ export interface MasterRow {
   NNBF_YTD_USD: number;
   Perf_Month: number;
   Perf_YTD: number;
+  Asset_Class: string;
 }
 
 export interface DisplacementRow {
@@ -74,6 +76,7 @@ export function setLiveData(args: {
   PORTFOLIO_TYPES = distinct(MASTER_DATA.map((r) => r.Portfolio_Type));
   MANAGERS = distinct(MASTER_DATA.map((r) => r.Manager)).sort();
   CATEGORIES = distinct(MASTER_DATA.map((r) => r.Category)).sort();
+  ASSET_CLASSES = distinct(MASTER_DATA.map((r) => r.Asset_Class).filter(Boolean)).sort();
 }
 
 // ---------- Selectors ----------
@@ -460,6 +463,138 @@ export function getCategoryWeightBubbles(f: Filters, afp: AFP, bucket?: Bucket) 
     const sizeShare = (blkInCat / totalInCat) * 100; // 0..100
     return { category: cat, idx, aggWeight, afpWeight, sizeShare };
   });
+}
+
+// ---------- Category weight grouped bars (System vs AFP) ----------
+
+export type AssetClassFilter = "Equity" | "Fixed Income" | "All";
+export type BucketFilter = Bucket | "All";
+
+export function getCategoryWeightBars(
+  f: Filters,
+  afp: AFP,
+  opts: { bucket: BucketFilter; assetClass: AssetClassFilter },
+) {
+  const filterFn = (r: MasterRow) => {
+    if (opts.bucket !== "All" && bucketOf(r) !== opts.bucket) return false;
+    if (opts.assetClass !== "All" && r.Asset_Class !== opts.assetClass) return false;
+    return true;
+  };
+  const allRows = rowsAt(f.date, []).filter(filterFn);
+  const afpRows = rowsAt(f.date, [afp]).filter(filterFn);
+  const totalAll = sumBy(allRows, (r) => r.AUM_USD) || 1;
+  const totalAfp = sumBy(afpRows, (r) => r.AUM_USD) || 1;
+  return CATEGORIES.map((cat) => {
+    const allCat = allRows.filter((r) => r.Category === cat);
+    const afpCat = afpRows.filter((r) => r.Category === cat);
+    const allCatTot = sumBy(allCat, (r) => r.AUM_USD);
+    const afpCatTot = sumBy(afpCat, (r) => r.AUM_USD);
+    const aggBlk = sumBy(allCat.filter((r) => r.Manager === "BlackRock"), (r) => r.AUM_USD);
+    const afpBlk = sumBy(afpCat.filter((r) => r.Manager === "BlackRock"), (r) => r.AUM_USD);
+    return {
+      category: cat,
+      aggWeight: (allCatTot / totalAll) * 100,
+      afpWeight: (afpCatTot / totalAfp) * 100,
+      aggBlkShare: allCatTot ? aggBlk / allCatTot : 0,
+      afpBlkShare: afpCatTot ? afpBlk / afpCatTot : 0,
+    };
+  }).filter((r) => r.aggWeight > 0 || r.afpWeight > 0);
+}
+
+// Linear interpolation between two hex colors. t in 0..1.
+function lerpColor(a: string, b: string, t: number) {
+  const tt = Math.max(0, Math.min(1, t));
+  const ah = a.replace("#", "");
+  const bh = b.replace("#", "");
+  const ar = parseInt(ah.slice(0, 2), 16),
+    ag = parseInt(ah.slice(2, 4), 16),
+    ab = parseInt(ah.slice(4, 6), 16);
+  const br = parseInt(bh.slice(0, 2), 16),
+    bg = parseInt(bh.slice(2, 4), 16),
+    bb = parseInt(bh.slice(4, 6), 16);
+  const r = Math.round(ar + (br - ar) * tt);
+  const g = Math.round(ag + (bg - ag) * tt);
+  const bl = Math.round(ab + (bb - ab) * tt);
+  return `#${[r, g, bl].map((x) => x.toString(16).padStart(2, "0")).join("")}`;
+}
+/** share in 0..1; light grey -> dark grey */
+export function shadeGrey(share: number) {
+  return lerpColor("#E5E5E5", "#3A3A3A", share);
+}
+/** share in 0..1; light green -> dark BLK green */
+export function shadeGreen(share: number) {
+  return lerpColor("#BFEA9A", "#0F5A1E", share);
+}
+
+// ---------- Top 5 manager hover breakdowns ----------
+
+export function getManagerAfpBreakdown(f: Filters, brand: string, bucket: Bucket) {
+  const rows = rowsAt(f.date, f.afps).filter((r) => bucketOf(r) === bucket && brandOf(r) === brand);
+  const m = new Map<AFP, number>();
+  for (const r of rows) m.set(r.AFP, (m.get(r.AFP) ?? 0) + r.AUM_USD);
+  return [...m.entries()]
+    .map(([AFP, AUM]) => ({ AFP, AUM }))
+    .sort((a, b) => b.AUM - a.AUM);
+}
+
+export function getOthersManagerBreakdown(f: Filters, bucket: Bucket) {
+  const rows = rowsAt(f.date, f.afps).filter((r) => bucketOf(r) === bucket);
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const b = brandOf(r);
+    map.set(b, (map.get(b) ?? 0) + r.AUM_USD);
+  }
+  const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
+  const others = sorted.slice(5);
+  return others.map(([Manager, AUM]) => ({ Manager, AUM })).sort((a, b) => b.AUM - a.AUM);
+}
+
+// ---------- Monthly NNB by bucket (grouped bar) ----------
+
+export function getMonthlyNnbByBucketSeries(afps: AFP[]) {
+  return MONTHS.map((m) => {
+    const row: Record<string, number | string> = { m, ETF: 0, "Mutual Fund": 0, "Money Market": 0 };
+    for (const r of rowsAt(m, afps)) {
+      const b = bucketOf(r);
+      row[b] = (row[b] as number) + r.NNB_Month_USD;
+    }
+    return row;
+  });
+}
+
+// ---------- Top 5 + Others manager share over time ----------
+
+export function getTopManagersShareSeries(afps: AFP[], bucket: Bucket) {
+  // Determine top 5 brands across all months in scope
+  const totals = new Map<string, number>();
+  for (const m of MONTHS) {
+    for (const r of rowsAt(m, afps).filter((r) => bucketOf(r) === bucket)) {
+      const b = brandOf(r);
+      totals.set(b, (totals.get(b) ?? 0) + r.AUM_USD);
+    }
+  }
+  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, 5).map(([k]) => k);
+  const series = MONTHS.map((m) => {
+    const rows = rowsAt(m, afps).filter((r) => bucketOf(r) === bucket);
+    const monthMap = new Map<string, number>();
+    let total = 0;
+    for (const r of rows) {
+      const b = brandOf(r);
+      monthMap.set(b, (monthMap.get(b) ?? 0) + r.AUM_USD);
+      total += r.AUM_USD;
+    }
+    const row: Record<string, number | string> = { m };
+    let othersAbs = 0;
+    for (const [k, v] of monthMap) {
+      if (top.includes(k)) row[k] = total ? (v / total) * 100 : 0;
+      else othersAbs += v;
+    }
+    for (const k of top) if (!(k in row)) row[k] = 0;
+    row["Others"] = total ? (othersAbs / total) * 100 : 0;
+    return row;
+  });
+  return { data: series, brands: [...top, "Others"] };
 }
 
 // ---------- Category flow bubbles (ETF NNB vs MF NNB) ----------
