@@ -618,17 +618,40 @@ interface FlatNodeProps {
   name?: string;
   fill?: string;
   depth?: number;
+  size?: number;
 }
 
+const TreemapHoverContext = createContext<{
+  total: number;
+  setHovered: (n: string | null) => void;
+}>({ total: 0, setHovered: () => {} });
+
 function FlatNode(props: FlatNodeProps) {
-  const { x = 0, y = 0, width = 0, height = 0, name, fill = CHART_COLORS.competitor, depth } = props;
+  const { x = 0, y = 0, width = 0, height = 0, name, fill = CHART_COLORS.competitor, depth, size = 0 } = props;
+  const { total, setHovered } = useContext(TreemapHoverContext);
   if (depth === 0) return null;
+  const pct = total > 0 ? size / total : 0;
   return (
-    <g>
+    <g
+      onMouseEnter={() => name && setHovered(name)}
+      onMouseLeave={() => setHovered(null)}
+    >
       <rect x={x} y={y} width={width} height={height} fill={fill} stroke="#fff" strokeWidth={1.5} />
       {width > 60 && height > 24 && (
         <text x={x + 6} y={y + 16} fill="#fff" fontSize={11} fontWeight={500}>
           {name}
+        </text>
+      )}
+      {width > 40 && height > 28 && (
+        <text
+          x={x + width - 6}
+          y={y + height - 6}
+          fill="#fff"
+          fontSize={10}
+          fontWeight={600}
+          textAnchor="end"
+        >
+          {formatPct(pct, pct < 0.1 ? 1 : 0)}
         </text>
       )}
     </g>
