@@ -713,14 +713,16 @@ function NnbTooltip({ active, payload, categories }: NnbTooltipProps) {
   const row = payload[0]?.payload;
   if (!row) return null;
   const manager = String(row.Manager ?? "");
-  const breakdown = categories
+  const all = categories
     .map((c) => {
       const pos = (row[`${c}__pos`] as number) ?? 0;
       const neg = (row[`${c}__neg`] as number) ?? 0;
       return { category: c, value: pos + neg };
     })
-    .filter((x) => x.value !== 0)
-    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+    .filter((x) => x.value !== 0);
+  const positives = all.filter((x) => x.value > 0).sort((a, b) => b.value - a.value);
+  const negatives = all.filter((x) => x.value < 0).sort((a, b) => b.value - a.value);
+  const breakdown = [...positives, ...negatives];
   const net = breakdown.reduce((a, b) => a + b.value, 0);
   return (
     <div className="bg-card border border-border rounded-sm shadow-md p-2.5 text-xs min-w-[220px]">
