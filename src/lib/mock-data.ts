@@ -865,6 +865,39 @@ export function getAfpCompositionDonut(
   return { items: out, dimension: opp };
 }
 
+/** Leaf-scoped donut: filter to the hovered manager OR category, then group Top 5 of the opposite dimension + Others. */
+export function getAfpCompositionLeafDonut(
+  afps: AFP[],
+  bucket: Bucket,
+  dimension: "Manager" | "Category",
+  leafName: string,
+  monthDate: string,
+) {
+  const opp: "Manager" | "Category" = dimension === "Manager" ? "Category" : "Manager";
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      r.Date === monthDate &&
+      (afps.length === 0 || afps.includes(r.AFP)) &&
+      bucketOf(r) === bucket &&
+      (dimension === "Manager" ? r.Manager === leafName : r.Category === leafName),
+  );
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const k = opp === "Manager" ? r.Manager : r.Category;
+    map.set(k, (map.get(k) ?? 0) + r.AUM_USD);
+  }
+  const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, 5);
+  const rest = sorted.slice(5).reduce((a, [, v]) => a + v, 0);
+  const out = top.map(([name, value]) => ({
+    name,
+    value,
+    fill: opp === "Manager" ? managerColor(name as Manager) : categoryColor(name as Category),
+  }));
+  if (rest > 0) out.push({ name: "Others", value: rest, fill: CHART_COLORS.competitor });
+  return { items: out, dimension: opp, leafName };
+}
+
 /**
  * Find the canonical ticker for a security ISIN. Returns the live `Ticker`
  * field if present (ETFs), or empty string for MFs / MMs.
