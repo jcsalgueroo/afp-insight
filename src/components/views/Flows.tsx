@@ -483,7 +483,8 @@ export function Flows() {
         </div>
       </CardShell>
 
-      {/* 5) Top/Bottom 5 securities */}
+      {/* 5 + 6) Top/Bottom 5 + Monthly Flows by Bucket — side by side */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       <CardShell
         title="Top 5 / Bottom 5 Securities by Flows"
         subtitle={tbBucket === "ETF" ? "ETFs by Ticker" : "Mutual Funds by Name"}
@@ -532,7 +533,6 @@ export function Flows() {
         </div>
       </CardShell>
 
-      {/* 6) Monthly Flows by Bucket — diverging */}
       <CardShell
         title="Monthly Flows by Bucket"
         subtitle="NNB stacked by ETF / Mutual Fund / Money Market (signed)"
@@ -558,6 +558,7 @@ export function Flows() {
           </ResponsiveContainer>
         </div>
       </CardShell>
+      </div>
 
       {/* 7) YTD NNB & NNBF by Manager — diverging stacked bars */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
