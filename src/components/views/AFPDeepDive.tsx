@@ -14,7 +14,7 @@ import {
   Cell,
   ReferenceLine,
 } from "recharts";
-import { Check, ChevronDown, ChevronRight, Filter, Search } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Search } from "lucide-react";
 import {
   AFPS,
   CHART_COLORS,
