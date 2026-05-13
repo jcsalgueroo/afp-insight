@@ -1040,19 +1040,15 @@ function flowRows(
   );
 }
 
-/** Top 5 managers by NNB + Others. */
-export function getNnbDonut(afps: AFP[], bucket: Bucket, period: Period, date: string) {
+/** NNB by manager (all non-zero), sorted descending. */
+export function getNnbByManager(afps: AFP[], bucket: Bucket, period: Period, date: string) {
   const rows = flowRows(afps, bucket, period, date);
   const m = new Map<Manager, number>();
   for (const r of rows) m.set(r.Manager, (m.get(r.Manager) ?? 0) + r.NNB_USD);
-  const sorted = [...m.entries()]
+  return [...m.entries()]
     .map(([Manager, NNB]) => ({ Manager: Manager as string, NNB }))
-    .sort((a, b) => Math.abs(b.NNB) - Math.abs(a.NNB));
-  const top = sorted.slice(0, 5);
-  const others = sorted.slice(5);
-  const othersSum = others.reduce((a, b) => a + b.NNB, 0);
-  if (others.length) top.push({ Manager: "Others", NNB: othersSum });
-  return top;
+    .filter((d) => d.NNB !== 0)
+    .sort((a, b) => b.NNB - a.NNB);
 }
 
 /** Cumulative NNB stacked bars: by Manager (X) stacked by Category, or vice versa. */
