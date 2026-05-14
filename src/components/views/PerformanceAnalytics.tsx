@@ -323,19 +323,7 @@ export function PerformanceAnalytics() {
                 />
                 <ZAxis type="number" dataKey="z" range={[60, 600]} />
                 <ReferenceLine y={0} stroke="#999" />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  cursor={{ strokeDasharray: "3 3" }}
-                  formatter={(v: number, n: string) => {
-                    if (n === "Weight") return [`${v.toFixed(2)}%`, "Weight"];
-                    if (n === "YTD Perf") return [`${v.toFixed(2)}%`, "YTD Perf"];
-                    return [v, n];
-                  }}
-                  labelFormatter={(_, items) => {
-                    const p = items?.[0]?.payload as { cat?: string; group?: string };
-                    return p ? `${p.group} · ${p.cat}` : "";
-                  }}
-                />
+                <Tooltip cursor={{ strokeDasharray: "3 3" }} content={<HoldingsTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {catGrouped.map((g) => (
                   <Scatter
@@ -379,15 +367,7 @@ export function PerformanceAnalytics() {
                 />
                 <ZAxis range={[180, 180]} />
                 <ReferenceLine y={0} stroke="#999" />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  cursor={{ strokeDasharray: "3 3" }}
-                  formatter={(v: number, n: string) => [`${v.toFixed(2)}%`, n]}
-                  labelFormatter={(_, items) => {
-                    const p = items?.[0]?.payload as { group?: string };
-                    return p?.group ?? "";
-                  }}
-                />
+                <Tooltip cursor={{ strokeDasharray: "3 3" }} content={<SimpleTooltip weightLabel={`${acAc} weight`} />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {acGrouped.map((g) => (
                   <Scatter
@@ -396,13 +376,7 @@ export function PerformanceAnalytics() {
                     data={g.data}
                     fill={afpColor(g.name as AFP | "System")}
                     fillOpacity={g.name === "System" ? 0.9 : 0.7}
-                  >
-                    <LabelList
-                      dataKey="group"
-                      position="top"
-                      style={{ fontSize: 10, fill: "#333" }}
-                    />
-                  </Scatter>
+                  />
                 ))}
               </ScatterChart>
             </ResponsiveContainer>
@@ -465,15 +439,7 @@ export function PerformanceAnalytics() {
                 strokeDasharray="4 4"
                 label={{ value: "System YTD", fontSize: 10, fill: "#666", position: "right" }}
               />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                cursor={{ strokeDasharray: "3 3" }}
-                formatter={(v: number, n: string) => [`${v.toFixed(2)}%`, n]}
-                labelFormatter={(_, items) => {
-                  const p = items?.[0]?.payload as { group?: string };
-                  return p?.group ?? "";
-                }}
-              />
+              <Tooltip cursor={{ strokeDasharray: "3 3" }} content={<HoldingsTooltip />} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               {dispGrouped.map((g) => (
                 <Scatter
@@ -482,13 +448,7 @@ export function PerformanceAnalytics() {
                   data={g.data}
                   fill={afpColor(g.name as AFP | "System")}
                   fillOpacity={g.name === "System" ? 0.9 : 0.75}
-                >
-                  <LabelList
-                    dataKey="group"
-                    position="top"
-                    style={{ fontSize: 10, fill: "#333" }}
-                  />
-                </Scatter>
+                />
               ))}
             </ScatterChart>
           </ResponsiveContainer>
