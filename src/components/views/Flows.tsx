@@ -186,7 +186,7 @@ function TopBottomTooltip({
       <div className="font-semibold">{d.manager}</div>
       <div className="text-muted-foreground">{d.label}</div>
       <div className="flex justify-between gap-4 pt-1 border-t border-border">
-        <span className="text-muted-foreground">Total NNB</span>
+        <span className="text-muted-foreground">Total</span>
         <span className="tabular-nums font-medium">{formatUSD(d.nnb)}</span>
       </div>
       <div className="pt-1 space-y-0.5">
