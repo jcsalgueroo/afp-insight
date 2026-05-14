@@ -2004,30 +2004,34 @@ export interface CumPerfPoint {
 }
 
 export function getCumulativePerformanceSeries(
-  asOf: string,
+  _asOf?: string,
 ): CumPerfPoint[] {
-  const months = MONTHS.filter((m) => m >= PERF_BASELINE_MONTH && (!asOf || m <= asOf));
+  const months = MONTHS.filter((m) => m >= PERF_BASELINE_MONTH);
   if (!months.length) return [];
 
-  const series: ("System" | AFP)[] = ["System", ...AFPS];
-  const values: Record<string, number> = {};
-  series.forEach((s) => (values[s] = 100));
-
   const out: CumPerfPoint[] = [];
-  // Baseline row at PERF_BASELINE_MONTH = 100
-  const baseRow: CumPerfPoint = { month: months[0] };
-  series.forEach((s) => (baseRow[s] = 100));
-  out.push(baseRow);
-
-  for (let i = 1; i < months.length; i++) {
-    const m = months[i];
+  for (const m of months) {
     const monthRows = MASTER_DATA.filter((r) => r.Date === m);
     const point: CumPerfPoint = { month: m };
-    for (const s of series) {
-      const rs = s === "System" ? monthRows : monthRows.filter((r) => r.AFP === s);
-      const wp = wavg(rs, (r) => r.Perf_Month); // percent units (17.56 = 17.56%)
-      values[s] = values[s] * (1 + wp / 100);
-      point[s] = values[s];
+    // Per-AFP simple average of cumulative_performance
+    const afpIndex: Record<string, number> = {};
+    const afpAum: Record<string, number> = {};
+    for (const a of AFPS) {
+      const rs = monthRows.filter((r) => r.AFP === a && Number.isFinite(r.Cumulative_Perf) && r.Cumulative_Perf > 0);
+      if (!rs.length) continue;
+      const avg = rs.reduce((s, r) => s + r.Cumulative_Perf, 0) / rs.length;
+      afpIndex[a] = avg;
+      afpAum[a] = rs.reduce((s, r) => s + r.AUM_USD, 0);
+      point[a] = avg;
+    }
+    // System: AUM-weighted avg of AFP index levels
+    const totAum = Object.values(afpAum).reduce((a, b) => a + b, 0);
+    if (totAum > 0) {
+      const sys = Object.keys(afpIndex).reduce(
+        (s, a) => s + afpIndex[a] * afpAum[a],
+        0,
+      ) / totAum;
+      point.System = sys;
     }
     out.push(point);
   }
