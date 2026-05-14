@@ -1,7 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -21,7 +19,6 @@ import {
   getAssetClassWeightVsPerf,
   getCategoryAfpBubbles,
   getCategoryDispersion,
-  getCumulativePerformanceSeries,
   type AFP,
   type Category,
 } from "@/lib/mock-data";
@@ -45,14 +42,6 @@ const AC_TOGGLE = [
 type AssetClass = "Equity" | "Fixed Income";
 
 const tooltipStyle = { fontSize: 12, border: "1px solid #E5E5E5", borderRadius: 4 } as const;
-
-function shortMonth(m: string) {
-  const [y, mo] = m.split("-");
-  return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString("en-US", {
-    month: "short",
-    year: "2-digit",
-  });
-}
 
 type HoldingsPayload = {
   group?: string;
@@ -138,10 +127,6 @@ function CardShell({
 export function PerformanceAnalytics() {
   const { date } = useDashboard();
 
-  // 1) Cumulative performance line
-  const cumData = useMemo(() => getCumulativePerformanceSeries(date), [date]);
-  const cumSeries: ("System" | AFP)[] = ["System", ...AFPS];
-
   // 2) Category × AFP scatter
   const [catAc, setCatAc] = useState<AssetClass>("Equity");
   const [catAfp, setCatAfp] = useState<"All" | AFP>("All");
@@ -211,51 +196,6 @@ export function PerformanceAnalytics() {
           Portfolio performance, positioning and cross-sectional dispersion across AFPs.
         </p>
       </div>
-
-      {/* 1) Cumulative line */}
-      <CardShell
-        title="Cumulative Portfolio Performance"
-        subtitle={`Indexed to 100 at Dec 2025 · AUM-weighted monthly performance`}
-      >
-        <div className="h-96">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={cumData} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
-              <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
-              <XAxis
-                dataKey="month"
-                stroke="#999"
-                fontSize={11}
-                tickFormatter={shortMonth}
-              />
-              <YAxis
-                stroke="#999"
-                fontSize={11}
-                width={50}
-                domain={["auto", "auto"]}
-                tickFormatter={(v) => v.toFixed(1)}
-              />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                labelFormatter={(l) => shortMonth(String(l))}
-                formatter={(v: number, n: string) => [v.toFixed(2), n]}
-              />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {cumSeries.map((s) => (
-                <Line
-                  key={s}
-                  type="monotone"
-                  dataKey={s}
-                  stroke={afpColor(s)}
-                  strokeWidth={s === "System" ? 2.5 : 1.6}
-                  strokeDasharray={s === "System" ? "0" : "0"}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </CardShell>
 
       {/* 2 & 3 side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
