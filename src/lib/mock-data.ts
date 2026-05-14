@@ -109,24 +109,49 @@ export function getKPIs(f: Filters) {
   );
 
   const aum = sumBy(cur, (r) => r.AUM_USD);
-  const nnb = sumBy(cur, (r) => r.NNB_YTD_USD);
   const rrr = sumBy(cur, (r) => r.RRR_USD);
-  const nnbf = sumBy(cur, (r) => r.NNBF_YTD_USD);
+
+  // Align YTD NNB / NNBF KPIs with the Flows Intelligence "YTD NNB / NNBF by
+  // Manager" charts: those charts cap each bucket at the top-6 brands by
+  // |YTD value|, which can exclude iShares or BlackRock from a given bucket.
+  // We sum the displayed iShares + BlackRock series across all three buckets
+  // at the selected month so the KPI matches what the chart actually shows.
+  const blkYtdAt = (month: string, metric: "NNB" | "NNBF"): number => {
+    let total = 0;
+    for (const b of BUCKETS) {
+      const s = getYtdByManagerSeries({ date: month, afps: f.afps, blkOnly: false }, b, metric);
+      const row = s.data.find((d) => d.m === month);
+      if (!row) continue;
+      for (const brand of ["iShares", "BlackRock"] as const) {
+        if (s.brands.includes(brand)) total += (row[brand] as number) ?? 0;
+      }
+    }
+    return total;
+  };
+  const nnb = blkYtdAt(f.date, "NNB");
+  const nnbf = blkYtdAt(f.date, "NNBF");
+  const nnbPrevAligned = blkYtdAt(MONTHS[prevMonthIdx], "NNB") || 1;
+  const nnbfPrevAligned = blkYtdAt(MONTHS[prevMonthIdx], "NNBF") || 1;
 
   const aumPrev = sumBy(prev, (r) => r.AUM_USD) || 1;
-  const nnbPrev = sumBy(prev, (r) => r.NNB_YTD_USD) || 1;
   const rrrPrev = sumBy(prev, (r) => r.RRR_USD) || 1;
-  const nnbfPrev = sumBy(prev, (r) => r.NNBF_YTD_USD) || 1;
 
   // 4-month sparkline
   const trend = (
-    metric: "AUM_USD" | "NNB_USD" | "RRR_USD" | "NNB_YTD_USD" | "NNBF_YTD_USD",
+    metric: "AUM_USD" | "NNB_USD" | "RRR_USD",
   ) => {
     const startIdx = Math.max(0, MONTHS.indexOf(f.date) - 3);
     return MONTHS.slice(startIdx, MONTHS.indexOf(f.date) + 1).map((m) => {
       const rows = applyFilters(MASTER_DATA, { ...f, date: m }).filter((r) => r.Manager === "BlackRock");
       return { m, v: sumBy(rows, (r) => r[metric]) };
     });
+  };
+  const trendBlkYtd = (metric: "NNB" | "NNBF") => {
+    const startIdx = Math.max(0, MONTHS.indexOf(f.date) - 3);
+    return MONTHS.slice(startIdx, MONTHS.indexOf(f.date) + 1).map((m) => ({
+      m,
+      v: blkYtdAt(m, metric),
+    }));
   };
 
   return {
@@ -135,12 +160,12 @@ export function getKPIs(f: Filters) {
     rrr,
     nnbf,
     aumDelta: (aum - sumBy(prev, (r) => r.AUM_USD)) / aumPrev,
-    nnbDelta: (nnb - sumBy(prev, (r) => r.NNB_YTD_USD)) / Math.abs(nnbPrev),
+    nnbDelta: (nnb - blkYtdAt(MONTHS[prevMonthIdx], "NNB")) / Math.abs(nnbPrevAligned),
     rrrDelta: (rrr - sumBy(prev, (r) => r.RRR_USD)) / Math.abs(rrrPrev),
-    nnbfDelta: (nnbf - sumBy(prev, (r) => r.NNBF_YTD_USD)) / Math.abs(nnbfPrev),
+    nnbfDelta: (nnbf - blkYtdAt(MONTHS[prevMonthIdx], "NNBF")) / Math.abs(nnbfPrevAligned),
     trendAUM: trend("AUM_USD"),
-    trendNNB: trend("NNB_YTD_USD"),
-    trendNNBF: trend("NNBF_YTD_USD"),
+    trendNNB: trendBlkYtd("NNB"),
+    trendNNBF: trendBlkYtd("NNBF"),
     trendRRR: trend("RRR_USD"),
   };
 }
