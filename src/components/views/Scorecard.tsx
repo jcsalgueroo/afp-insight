@@ -295,7 +295,7 @@ export function Scorecard() {
 
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <KpiCard label="BLK RRR (Monthly)" value={formatUSD(k.rrr)} delta={k.rrrDelta} trend={k.trendRRR} />
+        <KpiCard label="BLK RRR" value={formatUSD(k.rrr)} delta={k.rrrDelta} trend={k.trendRRR} />
         <KpiCard label="Total BLK AUM" value={formatUSD(k.aum)} delta={k.aumDelta} trend={k.trendAUM} />
         <KpiCard label="BLK YTD NNB" value={formatUSD(k.nnb)} delta={k.nnbDelta} trend={k.trendNNB} />
         <KpiCard label="BLK YTD NNBF" value={formatUSD(k.nnbf)} delta={k.nnbfDelta} trend={k.trendNNBF} />
