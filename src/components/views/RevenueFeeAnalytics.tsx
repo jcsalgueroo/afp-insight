@@ -32,6 +32,7 @@ import {
   getSecurityFeeNnb,
   managerColor,
   type AFP,
+  type AssetClassFilter,
   type Bucket,
   type Category,
   type Manager,
@@ -40,6 +41,7 @@ import { useDashboard } from "@/lib/dashboard-store";
 import { AfpFilterPopover } from "@/components/widgets/AfpFilterPopover";
 import { MultiSelectPopover } from "@/components/widgets/MultiSelectPopover";
 import { SegmentedToggle } from "@/components/widgets/SegmentedToggle";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import {
   Select,
   SelectContent,
@@ -53,6 +55,11 @@ const BUCKET_TOGGLE = [
   { value: "ETF" as Bucket, label: "ETF" },
   { value: "Mutual Fund" as Bucket, label: "MF" },
   { value: "Money Market" as Bucket, label: "MM" },
+] as const;
+const ASSET_CLASS_TOGGLE = [
+  { value: "All" as AssetClassFilter, label: "All" },
+  { value: "Equity" as AssetClassFilter, label: "Equity" },
+  { value: "Fixed Income" as AssetClassFilter, label: "FI" },
 ] as const;
 const BUCKET_ALL_TOGGLE = [
   { value: "All" as const, label: "All" },
@@ -106,8 +113,8 @@ function ManagerAumFeeCard() {
   const data = useMemo(() => getManagerAumFee([], bucket, date), [bucket, date]);
   return (
     <CardShell
-      title="Top Managers — AUM Org & Weighted Avg Fee"
-      subtitle="Top 10 by AUM Org + Others; line is AUM-weighted fee."
+      title="Top Managers — RRR Org & Weighted Avg Fee"
+      subtitle="Top 10 by RRR Org + Others; dots are AUM-weighted fee per manager."
       right={<SegmentedToggle options={BUCKET_TOGGLE} value={bucket} onChange={setBucket} />}
     >
       <div className="h-80 p-3">
@@ -164,7 +171,7 @@ function ManagerAumFeeCard() {
               }}
             />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Bar yAxisId="left" dataKey="AUM" name="AUM Org">
+            <Bar yAxisId="left" dataKey="RRR" name="RRR Org">
               {data.map((d, i) => (
                 <Cell key={i} fill={brandColor(d.Manager)} />
               ))}
@@ -174,9 +181,11 @@ function ManagerAumFeeCard() {
               type="monotone"
               dataKey="Fee_bps"
               name="Weighted Avg Fee (bps)"
-              stroke={CHART_COLORS.blkAlt}
-              strokeWidth={2}
-              dot={{ r: 3, fill: CHART_COLORS.blkAlt }}
+              stroke="transparent"
+              strokeWidth={0}
+              dot={{ r: 4, fill: CHART_COLORS.blkAlt, stroke: CHART_COLORS.blkAlt }}
+              activeDot={{ r: 5, fill: CHART_COLORS.blkAlt }}
+              isAnimationActive={false}
             />
           </ComposedChart>
         </ResponsiveContainer>
@@ -189,9 +198,10 @@ function ManagerAumFeeCard() {
 function FeeHeatmapCard() {
   const { date } = useDashboard();
   const [bucket, setBucket] = useState<Bucket>("ETF");
+  const [assetClass, setAssetClass] = useState<AssetClassFilter>("All");
   const { categories, managers, cells } = useMemo(
-    () => getFeeHeatmap([], bucket, date),
-    [bucket, date],
+    () => getFeeHeatmap([], bucket, date, assetClass),
+    [bucket, date, assetClass],
   );
   const fees = cells.flat().map((c) => c.fee).filter((v) => v > 0);
   const min = fees.length ? Math.min(...fees) : 0;
@@ -206,8 +216,13 @@ function FeeHeatmapCard() {
   return (
     <CardShell
       title="Fee Heatmap — Category × Top 5 Managers"
-      subtitle="Cells colored by AUM-weighted fee (relative scale)."
-      right={<SegmentedToggle options={BUCKET_TOGGLE} value={bucket} onChange={setBucket} />}
+      subtitle="Cells colored by AUM-weighted fee (relative scale). Hover for top products."
+      right={
+        <>
+          <SegmentedToggle options={BUCKET_TOGGLE} value={bucket} onChange={setBucket} />
+          <SegmentedToggle options={ASSET_CLASS_TOGGLE} value={assetClass} onChange={setAssetClass} />
+        </>
+      }
     >
       <div className="p-4 overflow-x-auto">
         <table className="w-full text-xs border-collapse">
@@ -231,11 +246,49 @@ function FeeHeatmapCard() {
                 {cells[i].map((cell, j) => (
                   <td
                     key={j}
-                    title={`${managers[j]} · ${cat}\nWeighted Fee: ${formatBps(cell.fee)}\nAUM: ${formatUSD(cell.aum)}`}
-                    className="px-3 py-3 text-center font-mono tabular-nums border border-border"
+                    className="p-0 text-center font-mono tabular-nums border border-border"
                     style={{ background: colorFor(cell.fee) }}
                   >
-                    {cell.fee ? cell.fee.toFixed(0) : "—"}
+                    <HoverCard openDelay={120} closeDelay={60}>
+                      <HoverCardTrigger asChild>
+                        <div className="px-3 py-3 cursor-default">
+                          {cell.fee ? cell.fee.toFixed(0) : "—"}
+                        </div>
+                      </HoverCardTrigger>
+                      <HoverCardContent className="w-72 p-3 text-xs">
+                        <div className="font-semibold mb-1">
+                          {managers[j]} · {cat}
+                        </div>
+                        <div className="flex justify-between text-muted-foreground mb-2">
+                          <span>Weighted Fee {formatBps(cell.fee)}</span>
+                          <span>AUM {formatUSD(cell.aum)}</span>
+                        </div>
+                        <div className="border-t border-border pt-2">
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                            Top 3 by AUM Org
+                          </div>
+                          {cell.topProducts.length ? (
+                            <table className="w-full">
+                              <tbody>
+                                {cell.topProducts.map((p) => (
+                                  <tr key={p.Ticker}>
+                                    <td className="py-0.5 pr-2 font-medium">{p.Ticker}</td>
+                                    <td className="py-0.5 pr-2 text-right font-mono">
+                                      {formatUSD(p.AUM)}
+                                    </td>
+                                    <td className="py-0.5 text-right font-mono text-muted-foreground">
+                                      {formatBps(p.Fee_bps)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          ) : (
+                            <div className="text-muted-foreground italic">No products</div>
+                          )}
+                        </div>
+                      </HoverCardContent>
+                    </HoverCard>
                   </td>
                 ))}
               </tr>
@@ -262,13 +315,14 @@ function SecurityFeeNnbCard() {
   const { date } = useDashboard();
   const [period, setPeriod] = useState<"Month" | "YTD">("YTD");
   const [feeMin, setFeeMin] = useState<"0" | "20" | "40">("0");
+  const [assetClass, setAssetClass] = useState<AssetClassFilter>("All");
   const [afps, setAfps] = useState<AFP[]>([]);
   const [managers, setManagers] = useState<Manager[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const data = useMemo(
     () =>
-      getSecurityFeeNnb(afps, managers, categories, period, date, Number(feeMin)),
-    [afps, managers, categories, period, date, feeMin],
+      getSecurityFeeNnb(afps, managers, categories, period, date, Number(feeMin), assetClass),
+    [afps, managers, categories, period, date, feeMin, assetClass],
   );
   const grouped = CATEGORIES.map((cat) => ({
     cat,
@@ -282,6 +336,7 @@ function SecurityFeeNnbCard() {
         <>
           <SegmentedToggle options={PERIOD_TOGGLE} value={period} onChange={setPeriod} />
           <SegmentedToggle options={FEE_TOGGLE} value={feeMin} onChange={setFeeMin} />
+          <SegmentedToggle options={ASSET_CLASS_TOGGLE} value={assetClass} onChange={setAssetClass} />
           <AfpFilterPopover value={afps} onChange={setAfps} />
           <MultiSelectPopover
             label="Mgr"
@@ -426,8 +481,12 @@ function RrrByAfpCard() {
 function CategoryFeeBubbleCard() {
   const { date } = useDashboard();
   const [bucket, setBucket] = useState<"All" | "ETF" | "Mutual Fund" | "Money Market">("All");
+  const [assetClass, setAssetClass] = useState<AssetClassFilter>("All");
   const [afp, setAfp] = useState<AFP>(AFPS[0]);
-  const data = useMemo(() => getCategoryFeeBubbles(afp, bucket, date), [afp, bucket, date]);
+  const data = useMemo(
+    () => getCategoryFeeBubbles(afp, bucket, date, assetClass),
+    [afp, bucket, date, assetClass],
+  );
 
   // Build scatter rows: each category yields two points (system grey + AFP green)
   const rows = data.flatMap((d, idx) => [
@@ -465,6 +524,7 @@ function CategoryFeeBubbleCard() {
       right={
         <>
           <SegmentedToggle options={BUCKET_ALL_TOGGLE} value={bucket} onChange={setBucket} />
+          <SegmentedToggle options={ASSET_CLASS_TOGGLE} value={assetClass} onChange={setAssetClass} />
           <Select value={afp} onValueChange={(v) => setAfp(v as AFP)}>
             <SelectTrigger className="h-7 text-xs w-[140px]">
               <SelectValue />

@@ -1245,7 +1245,7 @@ export function getScatterFiltered(
 
 // ---------- Revenue & Fees Analytics selectors ----------
 
-/** Top 10 managers by AUM (+ Others) with weighted fee & RRR for the selected bucket/month. */
+/** Top 10 managers by RRR Org (+ Others) with weighted fee & AUM for the selected bucket/month. */
 export function getManagerAumFee(afps: AFP[], bucket: Bucket, date: string) {
   const rows = MASTER_DATA.filter(
     (r) =>
@@ -1268,7 +1268,7 @@ export function getManagerAumFee(afps: AFP[], bucket: Bucket, date: string) {
       RRR: v.RRR,
       Fee_bps: v.AUM ? v.feeWeight / v.AUM : 0,
     }))
-    .sort((a, b) => b.AUM - a.AUM);
+    .sort((a, b) => b.RRR - a.RRR);
   const top = all.slice(0, 10);
   const rest = all.slice(10);
   if (rest.length) {
@@ -1281,16 +1281,24 @@ export function getManagerAumFee(afps: AFP[], bucket: Bucket, date: string) {
 }
 
 /** Fee heatmap: rows = Categories, cols = top 5 Managers. */
-export function getFeeHeatmap(afps: AFP[], bucket: Bucket, date: string) {
+export function getFeeHeatmap(
+  afps: AFP[],
+  bucket: Bucket,
+  date: string,
+  assetClass: AssetClassFilter = "All",
+) {
   const rows = MASTER_DATA.filter(
     (r) =>
       r.Date === date &&
       (afps.length === 0 || afps.includes(r.AFP)) &&
-      bucketOf(r) === bucket,
+      bucketOf(r) === bucket &&
+      (assetClass === "All" || r.Asset_Class === assetClass),
   );
-  const cats = CATEGORIES.filter((c) =>
-    bucket === "Money Market" ? c === "Money Market" : c !== "Money Market",
-  );
+  const cats = CATEGORIES.filter((c) => {
+    if (bucket === "Money Market" ? c !== "Money Market" : c === "Money Market") return false;
+    if (assetClass !== "All" && categoryAssetClass(c) !== assetClass) return false;
+    return true;
+  });
   const mgrAum = new Map<Manager, number>();
   for (const r of rows) mgrAum.set(r.Manager, (mgrAum.get(r.Manager) ?? 0) + r.AUM_USD);
   const managers = [...mgrAum.entries()]
@@ -1302,7 +1310,23 @@ export function getFeeHeatmap(afps: AFP[], bucket: Bucket, date: string) {
       const sub = rows.filter((r) => r.Category === cat && r.Manager === mgr);
       const aum = sumBy(sub, (r) => r.AUM_USD);
       const fw = sumBy(sub, (r) => r.Fee_bps * r.AUM_USD);
-      return { fee: aum ? fw / aum : 0, aum };
+      // Aggregate per-product (ISIN) AUM & fee for hover-card top 3.
+      const byIsin = new Map<string, { Name: string; Ticker: string; AUM: number; Fee_bps: number }>();
+      for (const r of sub) {
+        const cur = byIsin.get(r.ISIN);
+        if (cur) cur.AUM += r.AUM_USD;
+        else
+          byIsin.set(r.ISIN, {
+            Name: r.Name,
+            Ticker: tickerOf(r.ISIN),
+            AUM: r.AUM_USD,
+            Fee_bps: r.Fee_bps,
+          });
+      }
+      const topProducts = [...byIsin.values()]
+        .sort((a, b) => b.AUM - a.AUM)
+        .slice(0, 3);
+      return { fee: aum ? fw / aum : 0, aum, topProducts };
     }),
   );
   return { categories: cats as string[], managers: managers as string[], cells };
@@ -1316,6 +1340,7 @@ export function getSecurityFeeNnb(
   period: Period,
   date: string,
   feeMinBps: number,
+  assetClass: AssetClassFilter = "All",
 ) {
   const dates = period === "YTD" ? monthsYTD(date) : [date];
   const rows = MASTER_DATA.filter(
@@ -1323,7 +1348,8 @@ export function getSecurityFeeNnb(
       dates.includes(r.Date) &&
       (afps.length === 0 || afps.includes(r.AFP)) &&
       (managers.length === 0 || managers.includes(r.Manager)) &&
-      (categories.length === 0 || categories.includes(r.Category)),
+      (categories.length === 0 || categories.includes(r.Category)) &&
+      (assetClass === "All" || r.Asset_Class === assetClass),
   );
   type Sec = {
     ISIN: string;
@@ -1413,14 +1439,24 @@ export function getRrrByAfpCategory(managers: Manager[], bucket: Bucket, date: s
 }
 
 /** Category fee bubbles: system vs selected AFP, with category AUM share & BLK share. */
-export function getCategoryFeeBubbles(afp: AFP, bucket: Bucket | "All", date: string) {
+export function getCategoryFeeBubbles(
+  afp: AFP,
+  bucket: Bucket | "All",
+  date: string,
+  assetClass: AssetClassFilter = "All",
+) {
   const all = MASTER_DATA.filter(
-    (r) => r.Date === date && (bucket === "All" || bucketOf(r) === bucket),
+    (r) =>
+      r.Date === date &&
+      (bucket === "All" || bucketOf(r) === bucket) &&
+      (assetClass === "All" || r.Asset_Class === assetClass),
   );
   const totalAll = sumBy(all, (r) => r.AUM_USD) || 1;
-  const cats = CATEGORIES.filter((c) =>
-    bucket === "Money Market" ? c === "Money Market" : true,
-  );
+  const cats = CATEGORIES.filter((c) => {
+    if (bucket === "Money Market" && c !== "Money Market") return false;
+    if (assetClass !== "All" && categoryAssetClass(c) !== assetClass) return false;
+    return true;
+  });
   return cats.map((cat) => {
     const inCat = all.filter((r) => r.Category === cat);
     const sysAum = sumBy(inCat, (r) => r.AUM_USD);
