@@ -188,6 +188,12 @@ export function AFPDeepDive() {
   const [posPortfolio, setPosPortfolio] = useState<PortfolioType | "All">("All");
   const [posSearch, setPosSearch] = useState("");
   const [openPosCat, setOpenPosCat] = useState<Set<Category>>(new Set());
+  const toggleSet = (s: Set<string>, key: string, setter: (n: Set<string>) => void) => {
+    const n = new Set(s);
+    if (n.has(key)) n.delete(key);
+    else n.add(key);
+    setter(n);
+  };
   const positions = useMemo(
     () => getAfpPositions(afps, posPortfolio, posBucket, date),
     [afps, posPortfolio, posBucket, date],
