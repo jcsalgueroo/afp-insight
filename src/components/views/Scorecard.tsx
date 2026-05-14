@@ -247,6 +247,18 @@ export function Scorecard() {
   // Composition by category
   const [compAfps, setCompAfps] = useState<AFP[]>([]);
 
+  // BLK NNB / NNBF by AFP (stacked by bucket)
+  const [blkNnbPeriod, setBlkNnbPeriod] = useState<"Month" | "YTD">("YTD");
+  const [blkNnbfPeriod, setBlkNnbfPeriod] = useState<"Month" | "YTD">("YTD");
+  const blkNnbByAfp = useMemo(
+    () => getBlkFlowsByAfp("NNB", blkNnbPeriod, date),
+    [blkNnbPeriod, date],
+  );
+  const blkNnbfByAfp = useMemo(
+    () => getBlkFlowsByAfp("NNBF", blkNnbfPeriod, date),
+    [blkNnbfPeriod, date],
+  );
+
   const aumSeries = useMemo(
     () => getAumOrgByBucketSeries(aumLocalAfps, "AUM_USD"),
     [aumLocalAfps],
