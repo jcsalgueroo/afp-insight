@@ -1634,6 +1634,7 @@ export function getDomicileCompositionSeries(afps: AFP[]) {
   return MONTHS.map((m) => {
     const row: Record<string, number | string> = { m, US: 0, UCITS: 0, Other: 0 };
     for (const r of rowsAt(m, afps)) {
+      if (bucketOf(r) !== "ETF") continue;
       const g = domicileGroup(r);
       row[g] = (row[g] as number) + r.AUM_USD;
     }
@@ -1645,7 +1646,9 @@ export function getDomicileCompositionSeries(afps: AFP[]) {
 export function getDomicileNnbByAfp(period: "Month" | "YTD", date: string) {
   const field: keyof MasterRow = period === "YTD" ? "NNB_YTD_USD" : "NNB_Month_USD";
   return AFPS.map((afp) => {
-    const rows = MASTER_DATA.filter((r) => r.Date === date && r.AFP === afp);
+    const rows = MASTER_DATA.filter(
+      (r) => r.Date === date && r.AFP === afp && bucketOf(r) === "ETF",
+    );
     let us = 0, ucits = 0, other = 0;
     for (const r of rows) {
       const v = r[field] as number;
@@ -1696,6 +1699,7 @@ export function getDomicileShareByCategory(
   const rows = MASTER_DATA.filter(
     (r) =>
       r.Date === date &&
+      bucketOf(r) === "ETF" &&
       (assetClass === "All" || r.Asset_Class === assetClass),
   );
   const cats = CATEGORIES.filter(
@@ -1734,6 +1738,7 @@ export function getUcitsNnbByCategory(
   const rows = MASTER_DATA.filter(
     (r) =>
       r.Date === date &&
+      bucketOf(r) === "ETF" &&
       domicileGroup(r) === "UCITS" &&
       (afps.length === 0 || afps.includes(r.AFP)) &&
       (categories.length === 0 || categories.includes(r.Category)),
