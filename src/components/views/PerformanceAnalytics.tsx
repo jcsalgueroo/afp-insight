@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   XAxis,
   YAxis,
@@ -16,6 +16,7 @@ import {
   CATEGORIES,
   CHART_COLORS,
   afpColor,
+  categoryAssetClass,
   getAssetClassWeightVsPerf,
   getCategoryAfpBubbles,
   getCategoryDispersion,
@@ -164,7 +165,16 @@ export function PerformanceAnalytics() {
 
   // 4) Category dispersion vs system
   const [dispAc, setDispAc] = useState<AssetClass>("Equity");
-  const [dispCat, setDispCat] = useState<Category>(CATEGORIES[0] ?? "");
+  const dispCategories = useMemo(
+    () => CATEGORIES.filter((c) => categoryAssetClass(c) === dispAc),
+    [dispAc],
+  );
+  const [dispCat, setDispCat] = useState<Category>(dispCategories[0] ?? CATEGORIES[0] ?? "");
+  useEffect(() => {
+    if (!dispCategories.includes(dispCat) && dispCategories[0]) {
+      setDispCat(dispCategories[0]);
+    }
+  }, [dispCategories, dispCat]);
   const disp = useMemo(
     () => getCategoryDispersion(date, dispAc, dispCat),
     [date, dispAc, dispCat],
@@ -318,7 +328,7 @@ export function PerformanceAnalytics() {
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
-                {CATEGORIES.map((c) => (
+                {dispCategories.map((c) => (
                   <SelectItem key={c} value={c}>
                     {c}
                   </SelectItem>
