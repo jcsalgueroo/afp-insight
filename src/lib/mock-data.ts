@@ -1952,8 +1952,8 @@ export function getCumulativePerformanceSeries(
     const point: CumPerfPoint = { month: m };
     for (const s of series) {
       const rs = s === "System" ? monthRows : monthRows.filter((r) => r.AFP === s);
-      const wp = wavg(rs, (r) => r.Perf_Month); // already in percent units
-      values[s] = values[s] * (1 + wp / 100);
+      const wp = wavg(rs, (r) => r.Perf_Month); // decimal (0.1756 = 17.56%)
+      values[s] = values[s] * (1 + wp);
       point[s] = values[s];
     }
     out.push(point);
@@ -1967,6 +1967,7 @@ export interface CategoryAfpBubble {
   weight: number; // 0..1 of total portfolio
   ytdPerf: number; // percent units
   aum: number;
+  topHoldings: { name: string; aum: number }[];
 }
 
 export function getCategoryAfpBubbles(
@@ -1992,6 +1993,7 @@ export function getCategoryAfpBubbles(
         weight: aum / totalAum,
         ytdPerf: wavg(cr, (r) => r.Perf_YTD),
         aum,
+        topHoldings: topHoldingsFor(cr, 5),
       });
     }
   };
@@ -2034,6 +2036,7 @@ export interface CategoryDispersionPoint {
   group: AFP | "System";
   weight: number;
   ytdPerf: number;
+  topHoldings: { name: string; aum: number }[];
 }
 
 export function getCategoryDispersion(
@@ -2064,7 +2067,12 @@ export function getCategoryDispersion(
   const sysCatAum = sysCatRows.reduce((a, b) => a + b.AUM_USD, 0);
   const systemWeight = sysTotalAum ? sysCatAum / sysTotalAum : 0;
   const systemYtd = wavg(sysCatRows, (r) => r.Perf_YTD);
-  points.push({ group: "System", weight: systemWeight, ytdPerf: systemYtd });
+  points.push({
+    group: "System",
+    weight: systemWeight,
+    ytdPerf: systemYtd,
+    topHoldings: topHoldingsFor(sysCatRows, 5),
+  });
 
   for (const a of AFPS) {
     const afpAll = systemAll.filter((r) => r.AFP === a);
@@ -2076,8 +2084,23 @@ export function getCategoryDispersion(
       group: a,
       weight: totalAum ? cAum / totalAum : 0,
       ytdPerf: wavg(cr, (r) => r.Perf_YTD),
+      topHoldings: topHoldingsFor(cr, 5),
     });
   }
 
   return { points, systemWeight, systemYtd };
+}
+
+function topHoldingsFor(rows: MasterRow[], n: number): { name: string; aum: number }[] {
+  const map = new Map<string, { name: string; aum: number }>();
+  for (const r of rows) {
+    const key = r.ISIN || r.Ticker || r.Name;
+    const label = r.Name || r.Ticker || r.ISIN;
+    const cur = map.get(key);
+    if (cur) cur.aum += r.AUM_USD;
+    else map.set(key, { name: label, aum: r.AUM_USD });
+  }
+  return Array.from(map.values())
+    .sort((a, b) => b.aum - a.aum)
+    .slice(0, n);
 }

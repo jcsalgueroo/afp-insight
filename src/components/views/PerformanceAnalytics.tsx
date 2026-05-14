@@ -12,7 +12,6 @@ import {
   Scatter,
   ZAxis,
   ReferenceLine,
-  LabelList,
 } from "recharts";
 import {
   AFPS,
@@ -28,6 +27,7 @@ import {
   type Category,
   type PortfolioType,
 } from "@/lib/mock-data";
+import { formatUSD } from "@/lib/mock-data";
 import { useDashboard } from "@/lib/dashboard-store";
 import { MultiSelectPopover } from "@/components/widgets/MultiSelectPopover";
 import { SegmentedToggle } from "@/components/widgets/SegmentedToggle";
@@ -55,6 +55,60 @@ function shortMonth(m: string) {
     month: "short",
     year: "2-digit",
   });
+}
+
+type HoldingsPayload = {
+  group?: string;
+  cat?: string;
+  weight?: number;
+  ytd?: number;
+  topHoldings?: { name: string; aum: number }[];
+};
+
+function HoldingsTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: HoldingsPayload }> }) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0].payload;
+  return (
+    <div className="bg-popover border border-border rounded-md shadow-md p-3 text-xs min-w-[220px]">
+      <div className="font-semibold">{p.group}</div>
+      {p.cat && <div className="text-muted-foreground">{p.cat}</div>}
+      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5">
+        <span className="text-muted-foreground">Weight</span>
+        <span className="text-right tabular-nums">{p.weight != null ? `${p.weight.toFixed(2)}%` : "—"}</span>
+        <span className="text-muted-foreground">YTD Perf</span>
+        <span className="text-right tabular-nums">{p.ytd != null ? `${p.ytd.toFixed(2)}%` : "—"}</span>
+      </div>
+      {p.topHoldings && p.topHoldings.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-border">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Top 5 by AUM</div>
+          <ul className="space-y-0.5">
+            {p.topHoldings.map((h, i) => (
+              <li key={i} className="flex justify-between gap-3">
+                <span className="truncate max-w-[160px]">{h.name}</span>
+                <span className="tabular-nums text-muted-foreground">{formatUSD(h.aum, { compact: true })}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SimpleTooltip({ active, payload, weightLabel = "Weight" }: { active?: boolean; payload?: Array<{ payload: HoldingsPayload }>; weightLabel?: string }) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0].payload;
+  return (
+    <div className="bg-popover border border-border rounded-md shadow-md p-3 text-xs min-w-[180px]">
+      <div className="font-semibold">{p.group}</div>
+      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5">
+        <span className="text-muted-foreground">{weightLabel}</span>
+        <span className="text-right tabular-nums">{p.weight != null ? `${p.weight.toFixed(2)}%` : "—"}</span>
+        <span className="text-muted-foreground">YTD Perf</span>
+        <span className="text-right tabular-nums">{p.ytd != null ? `${p.ytd.toFixed(2)}%` : "—"}</span>
+      </div>
+    </div>
+  );
 }
 
 function CardShell({
@@ -113,6 +167,9 @@ export function PerformanceAnalytics() {
             z: Math.max(b.aum, 1),
             cat: b.category,
             group: b.group,
+            weight: b.weight * 100,
+            ytd: b.ytdPerf,
+            topHoldings: b.topHoldings,
           })),
       }));
   }, [catBubbles, catAfp]);
@@ -124,7 +181,7 @@ export function PerformanceAnalytics() {
     () =>
       acData.map((p) => ({
         name: p.group,
-        data: [{ x: p.weight * 100, y: p.ytdPerf, group: p.group }],
+        data: [{ x: p.weight * 100, y: p.ytdPerf, group: p.group, weight: p.weight * 100, ytd: p.ytdPerf }],
       })),
     [acData],
   );
@@ -140,9 +197,17 @@ export function PerformanceAnalytics() {
     () =>
       disp.points.map((p) => ({
         name: p.group,
-        data: [{ x: p.weight * 100, y: p.ytdPerf, group: p.group }],
+        data: [{
+          x: p.weight * 100,
+          y: p.ytdPerf,
+          group: p.group,
+          cat: dispCat,
+          weight: p.weight * 100,
+          ytd: p.ytdPerf,
+          topHoldings: p.topHoldings,
+        }],
       })),
-    [disp],
+    [disp, dispCat],
   );
 
   return (
@@ -257,19 +322,7 @@ export function PerformanceAnalytics() {
                 />
                 <ZAxis type="number" dataKey="z" range={[60, 600]} />
                 <ReferenceLine y={0} stroke="#999" />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  cursor={{ strokeDasharray: "3 3" }}
-                  formatter={(v: number, n: string) => {
-                    if (n === "Weight") return [`${v.toFixed(2)}%`, "Weight"];
-                    if (n === "YTD Perf") return [`${v.toFixed(2)}%`, "YTD Perf"];
-                    return [v, n];
-                  }}
-                  labelFormatter={(_, items) => {
-                    const p = items?.[0]?.payload as { cat?: string; group?: string };
-                    return p ? `${p.group} · ${p.cat}` : "";
-                  }}
-                />
+                <Tooltip cursor={{ strokeDasharray: "3 3" }} content={<HoldingsTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {catGrouped.map((g) => (
                   <Scatter
@@ -313,15 +366,7 @@ export function PerformanceAnalytics() {
                 />
                 <ZAxis range={[180, 180]} />
                 <ReferenceLine y={0} stroke="#999" />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  cursor={{ strokeDasharray: "3 3" }}
-                  formatter={(v: number, n: string) => [`${v.toFixed(2)}%`, n]}
-                  labelFormatter={(_, items) => {
-                    const p = items?.[0]?.payload as { group?: string };
-                    return p?.group ?? "";
-                  }}
-                />
+                <Tooltip cursor={{ strokeDasharray: "3 3" }} content={<SimpleTooltip weightLabel={`${acAc} weight`} />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {acGrouped.map((g) => (
                   <Scatter
@@ -330,13 +375,7 @@ export function PerformanceAnalytics() {
                     data={g.data}
                     fill={afpColor(g.name as AFP | "System")}
                     fillOpacity={g.name === "System" ? 0.9 : 0.7}
-                  >
-                    <LabelList
-                      dataKey="group"
-                      position="top"
-                      style={{ fontSize: 10, fill: "#333" }}
-                    />
-                  </Scatter>
+                  />
                 ))}
               </ScatterChart>
             </ResponsiveContainer>
@@ -399,15 +438,7 @@ export function PerformanceAnalytics() {
                 strokeDasharray="4 4"
                 label={{ value: "System YTD", fontSize: 10, fill: "#666", position: "right" }}
               />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                cursor={{ strokeDasharray: "3 3" }}
-                formatter={(v: number, n: string) => [`${v.toFixed(2)}%`, n]}
-                labelFormatter={(_, items) => {
-                  const p = items?.[0]?.payload as { group?: string };
-                  return p?.group ?? "";
-                }}
-              />
+              <Tooltip cursor={{ strokeDasharray: "3 3" }} content={<HoldingsTooltip />} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               {dispGrouped.map((g) => (
                 <Scatter
@@ -416,13 +447,7 @@ export function PerformanceAnalytics() {
                   data={g.data}
                   fill={afpColor(g.name as AFP | "System")}
                   fillOpacity={g.name === "System" ? 0.9 : 0.75}
-                >
-                  <LabelList
-                    dataKey="group"
-                    position="top"
-                    style={{ fontSize: 10, fill: "#333" }}
-                  />
-                </Scatter>
+                />
               ))}
             </ScatterChart>
           </ResponsiveContainer>
