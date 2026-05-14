@@ -12,7 +12,6 @@ import {
   Scatter,
   ZAxis,
   ReferenceLine,
-  LabelList,
 } from "recharts";
 import {
   AFPS,
