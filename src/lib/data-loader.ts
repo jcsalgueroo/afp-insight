@@ -136,7 +136,7 @@ function normalizeDisplacement(rows: Raw[]): DisplacementRow[] {
         BLK_ISIN: s(r.blk_alternative_isin),
         BLK_Ticker: "",
         Fee_Advantage_bps: num(r.fee_advantage_bps),
-        Perf_Advantage_pct: num(r.perf_advantage_pct) * 100,
+        Perf_Advantage_pct: num(r.perf_advantage_pct),
         AFP: afp,
       });
     }
