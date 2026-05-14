@@ -1,73 +1,52 @@
-# Performance Analytics screen + Flows quadrant labels
+# Performance Analytics — math fix + richer hover cards
 
-## 1. Sidebar + route
-- `src/components/shell/Sidebar.tsx`: insert new entry **"Performance Analytics"** (icon: `LineChart` from lucide-react) between **Flows Intelligence** and **Revenue & Fees Analytics**.
-- New route `src/routes/performance.tsx` → renders `PerformanceAnalytics` view.
-- New view file `src/components/views/PerformanceAnalytics.tsx`.
+## 1. Cumulative Portfolio Performance — math fix
+File: `src/lib/mock-data.ts`, `getCumulativePerformanceSeries`.
 
-## 2. Data helpers (in `src/lib/mock-data.ts`)
-All helpers operate on `MASTER_DATA` (all asset types — ETF, MF, MM) and respect the global As‑Of date from `useDashboard`.
+`Perf_Month` is a plain decimal (0.1756 = 17.56%), not a percent.
+- Change line 1956 from `values[s] * (1 + wp / 100)` to `values[s] * (1 + wp)`.
+- Weighting stays AUM-weighted via `AUM_USD` (the field used as "AUM Org" throughout the app — confirm same source).
+- No change to `getCumulativePerformanceSeries` signature; the line chart in `PerformanceAnalytics.tsx` keeps current axis/format.
 
-- `getCumulativePerformanceSeries(portfolioTypes: PortfolioType[], asOf: string)`
-  - Filter rows by `Portfolio_Type ∈ portfolioTypes` (empty = all).
-  - For each month from `2025-12` through `asOf` (sorted), build 6 series: one per AFP + `"System"`.
-  - For each AFP at month M: weighted average of `Perf_Month` using `AUM_USD` as weights across that AFP's rows in M (within selected portfolios). System = same calculation pooling all AFPs.
-  - Cumulative value: starts at **100** at `2025-12`; each subsequent month V_t = V_{t-1} × (1 + wavg_t). `Perf_Month` is treated as a percent (e.g. 1.23 → 1.23%) — confirm by the same convention already used elsewhere (`Perf_YTD` is shown with `.toFixed(2)%`).
-  - Returns `{ month, [AFP1]…[AFPn], System }[]`.
+Note: `Perf_YTD` continues to be treated as percent units (used in scatter Y axes shown as `xx.xx%`). Only `Perf_Month` math is corrected. Flag: if `Perf_YTD` is also a decimal in the source, it would need the same correction — call this out and ask if the YTD scatter values currently look 100× too large.
 
-- `getCategoryAfpBubbles(asOf, assetClass: "Equity"|"Fixed Income")`
-  - For each AFP and each Category present in that AFP at `asOf` (filtered to `Asset_Class = assetClass`):
-    - x = sum(AUM in category for that AFP) / sum(AUM for that AFP at asOf, all asset classes) → portfolio weight (decimal)
-    - y = AUM-weighted average of `Perf_YTD` in that category for that AFP
-    - label = Category, group = AFP
-  - Plus the same calculation for the System (all AFPs aggregated). System always returned.
-  - Output grouped by AFP/System for separate `<Scatter>` series with distinct colors.
+## 2. Category Positioning by AFP — rich hover card
+File: `src/components/views/PerformanceAnalytics.tsx`, `src/lib/mock-data.ts`.
 
-- `getAssetClassWeightVsPerf(asOf, assetClass)`
-  - For each AFP + System: x = AUM weight of `assetClass` within total portfolio at asOf, y = AUM-weighted `Perf_YTD` of that asset class. One bubble each.
+Add a custom recharts `<Tooltip content={...}>` showing for the hovered bubble:
+- AFP name
+- Category name
+- Category weight (% of AFP total portfolio AUM, current month)
+- AUM-weighted YTD performance for AFP × Category
+- Top 5 holdings in that AFP × Category at `asOf`, ranked by `AUM_USD`, with: Ticker/ISIN/Name (use Name when available else Ticker), `AUM_USD` formatted via `formatUSD`.
 
-- `getCategoryDispersion(asOf, assetClass, category)`
-  - System point: x = system weight in category, y = system YTD wavg.
-  - One bubble per AFP at (afp weight in category, afp YTD wavg in category). Empty if AFP doesn't hold the category.
+Data plumbing: extend `CategoryAfpBubble` (or attach a parallel lookup) so each bubble payload carries `topHoldings: { name: string; aum: number }[]` precomputed in `getCategoryAfpBubbles`. Avoid recomputing inside the tooltip render.
 
-## 3. View layout (`PerformanceAnalytics.tsx`)
-Reuses `CardShell` pattern, `SegmentedToggle`, `AfpFilterPopover`, `MultiSelectPopover`, recharts.
+For the System group: top 5 across all AFPs in that category.
 
-```text
-┌─────────────────────────────────────────────────────────┐
-│ Cumulative Performance (line chart)                     │
-│   right: Portfolio filter (defaults: all)               │
-│   5 AFP lines + System line, indexed to 100 at 2025-12  │
-├──────────────────────────┬──────────────────────────────┤
-│ Category positioning     │ Asset-class positioning      │
-│ Scatter: weight × YTD    │ Scatter: weight × YTD        │
-│ bubbles per Category×AFP │ one bubble per AFP+System    │
-│ toggle Equity / FI       │ toggle Equity / FI           │
-│ AFP filter (single sel)  │                              │
-│ + System always shown    │                              │
-├─────────────────────────────────────────────────────────┤
-│ Category dispersion vs System                           │
-│ Scatter, ReferenceLine x=systemWeight, y=systemYTD     │
-│ Equity/FI toggle + Category single-select filter        │
-└─────────────────────────────────────────────────────────┘
-```
+## 3. Asset-Class Weight vs Performance — remove labels, add hover card
+File: `src/components/views/PerformanceAnalytics.tsx`.
 
-- Portfolio filter for chart 1: a `MultiSelectPopover` over `PORTFOLIO_TYPES`, label "Portfolios". Empty = all.
-- AFP single-select for chart 2: small popover (or `Select`) listing each AFP; System bubbles always rendered as a separate `<Scatter>` series with distinct color (`CHART_COLORS.blk` or a system gray).
-- Category single-select for chart 4: `Select` of `CATEGORIES`.
-- Colors: reuse `managerColor` for AFPs is wrong here — AFPs need their own palette. Add `afpColor(afp)` derived from `CHART_COLORS` cycling, plus a fixed `SYSTEM_COLOR` token.
+- Remove the per-bubble `<LabelList dataKey="group">` (the chip showing AFP next to the dot).
+- Keep the legend (one entry per AFP + System) so colors are still readable. If user wants the legend removed too, easy follow-up — confirm.
+- Add a custom tooltip showing: AFP name, asset-class weight (%), YTD performance (%).
 
-## 4. Flows Intelligence — Performance vs Flows quadrants (`src/components/views/Flows.tsx`)
-- Add 4 quadrant labels rendered as recharts `<Label>` inside `<ReferenceArea>` (or absolute-positioned overlays):
-  - NE = "Performance Chasing"
-  - SE = "Profit Taking"
-  - SW = "Stopping Losses"
-  - NW = "High Conviction"
-- Add a `SegmentedToggle` (or small `Select`) "Quadrant: All / NE / SE / SW / NW" in the card header.
-- When a quadrant is selected, filter `scatter` data to points with the matching sign of `Perf` (x) and `NNB` (y) before grouping by manager. "All" keeps current behavior.
+## 4. Category Dispersion vs System — rich hover card
+File: `src/components/views/PerformanceAnalytics.tsx`, `src/lib/mock-data.ts`.
 
-## 5. Notes / conventions
-- All numbers reuse existing formatters (`formatUSD`, `.toFixed(2)%`).
-- No DB/schema changes; pure frontend over already-loaded `MASTER_DATA`.
-- New route registered automatically via TanStack file-based routing (do not edit `routeTree.gen.ts`).
-- Add `LineChart`/`Line` import where needed in the new view.
+Add a custom tooltip per bubble showing:
+- AFP name (or "System")
+- Selected Category name
+- Weight in category (% of AFP total portfolio AUM)
+- AUM-weighted YTD performance for AFP × Category
+- Top 5 holdings in that AFP × Category at `asOf` ranked by `AUM_USD`.
+
+Data plumbing: extend `getCategoryDispersion` return so each point includes `topHoldings`. System point shows top 5 across all AFPs in that category.
+
+## 5. Shared bits
+- One reusable `<HoldingsTooltip>` component in `PerformanceAnalytics.tsx` rendering the card (re-used by sections 2 and 4).
+- Holdings list helper `topHoldingsFor(rows, n=5)` in `mock-data.ts` to keep logic in one place.
+- No styling changes outside the tooltip cards; reuse `bg-popover`, `border`, `shadow-md` tokens.
+
+## Open question
+- Should `Perf_YTD` also be reinterpreted as a decimal (so 0.1756 → 17.56%)? Today the scatter axes assume it's already in percent units. If it's actually a decimal in the data, all four scatter charts would need a `* 100` on the Y values.
