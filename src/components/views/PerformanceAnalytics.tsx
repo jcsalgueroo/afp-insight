@@ -10,8 +10,6 @@ import {
   Scatter,
   ZAxis,
   ReferenceLine,
-  LineChart,
-  Line,
 } from "recharts";
 import {
   AFPS,
@@ -22,7 +20,6 @@ import {
   getAssetClassWeightVsPerf,
   getCategoryAfpBubbles,
   getCategoryDispersion,
-  getCumulativePerformanceSeries,
   type AFP,
   type Category,
 } from "@/lib/mock-data";
@@ -129,10 +126,6 @@ function CardShell({
 export function PerformanceAnalytics() {
   const { date } = useDashboard();
 
-  // 1) Cumulative performance line chart (Dec 2025 = 100 → latest)
-  const cumSeries = useMemo(() => getCumulativePerformanceSeries(), []);
-  const cumLines: ("System" | AFP)[] = ["System", ...AFPS];
-
   // 2) Category × AFP scatter
   const [catAc, setCatAc] = useState<AssetClass>("Equity");
   const [catAfp, setCatAfp] = useState<"All" | AFP>("All");
@@ -211,45 +204,6 @@ export function PerformanceAnalytics() {
           Portfolio performance, positioning and cross-sectional dispersion across AFPs.
         </p>
       </div>
-
-      {/* 1) Cumulative performance index */}
-      <CardShell
-        title="Cumulative Performance Index"
-        subtitle="Base 100 at Dec 2025 · One line per AFP plus AUM-weighted System"
-      >
-        <div className="h-96">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={cumSeries} margin={{ top: 10, right: 16, left: 10, bottom: 16 }}>
-              <CartesianGrid stroke={CHART_COLORS.grid} />
-              <XAxis dataKey="month" stroke="#999" fontSize={11} />
-              <YAxis
-                stroke="#999"
-                fontSize={11}
-                domain={["auto", "auto"]}
-                tickFormatter={(v) => Number(v).toFixed(1)}
-              />
-              <Tooltip
-                formatter={(v: number | string) =>
-                  typeof v === "number" ? v.toFixed(2) : v
-                }
-              />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {cumLines.map((g) => (
-                <Line
-                  key={g}
-                  type="monotone"
-                  dataKey={g}
-                  name={g}
-                  stroke={afpColor(g)}
-                  strokeWidth={g === "System" ? 2.5 : 1.75}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </CardShell>
 
       {/* 2 & 3 side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
