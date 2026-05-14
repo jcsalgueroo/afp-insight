@@ -13,8 +13,16 @@ import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search } from "lucide-re
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useDashboard } from "@/lib/dashboard-store";
-import { applyFilters, formatBps, formatUSD, MASTER_DATA, type MasterRow } from "@/lib/mock-data";
+import {
+  applyFilters,
+  formatBps,
+  formatUSD,
+  getSecurityAumByAfp,
+  MASTER_DATA,
+  type MasterRow,
+} from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
 export function Securities() {
   const { date, blkOnly } = useDashboard();
@@ -31,6 +39,7 @@ export function Securities() {
     { accessorKey: "AFP", header: "AFP" },
     { accessorKey: "Portfolio_Type", header: "Portfolio" },
     { accessorKey: "ISIN", header: "ISIN", cell: (c) => <span className="tabular-nums text-xs">{c.getValue<string>()}</span> },
+    { accessorKey: "Ticker", header: "Ticker", cell: (c) => <span className="tabular-nums text-xs">{c.getValue<string>() || "—"}</span> },
     { accessorKey: "Name", header: "Name" },
     {
       accessorKey: "Manager",
@@ -54,7 +63,7 @@ export function Securities() {
     {
       accessorKey: "AUM_USD",
       header: () => <div className="text-right">AUM</div>,
-      cell: (c) => <div className="text-right tabular-nums">{formatUSD(c.getValue<number>())}</div>,
+      cell: (c) => <AumHoverCell row={c.row.original} value={c.getValue<number>()} />,
     },
     {
       accessorKey: "NNB_USD",
