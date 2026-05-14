@@ -1841,3 +1841,57 @@ export function aggregateNewProductsByManager(rows: NewProductRow[]) {
     .map(([Manager, NNB]) => ({ Manager, NNB }))
     .sort((a, b) => b.NNB - a.NNB);
 }
+
+/**
+ * Products that previously had AUM but do NOT appear (or have zero AUM) in the
+ * selected month. Uses the latest prior month they appeared as the source for
+ * fee / YTD NNB / AUM and AFP breakdown.
+ */
+export function getDroppedProducts(
+  date: string,
+  bucket: Bucket,
+): NewProductRow[] {
+  // ISINs present with AUM>0 in current month
+  const currentIsins = new Set<string>();
+  for (const r of MASTER_DATA) {
+    if (r.Date === date && bucketOf(r) === bucket && r.AUM_USD > 0) {
+      currentIsins.add(r.ISIN);
+    }
+  }
+  // Per ISIN, latest prior month with AUM>0
+  const latestByIsin = new Map<string, string>();
+  for (const r of MASTER_DATA) {
+    if (r.Date >= date) continue;
+    if (bucketOf(r) !== bucket) continue;
+    if (r.AUM_USD <= 0) continue;
+    if (currentIsins.has(r.ISIN)) continue;
+    const prev = latestByIsin.get(r.ISIN);
+    if (!prev || r.Date > prev) latestByIsin.set(r.ISIN, r.Date);
+  }
+  const map = new Map<string, NewProductRow>();
+  for (const [isin, lastDate] of latestByIsin.entries()) {
+    const rs = MASTER_DATA.filter((r) => r.ISIN === isin && r.Date === lastDate);
+    if (rs.length === 0) continue;
+    const sample = rs[0];
+    const totalAum = rs.reduce((a, b) => a + b.AUM_USD, 0);
+    const am = new Map<AFP, number>();
+    for (const r of rs) am.set(r.AFP, (am.get(r.AFP) ?? 0) + r.NNB_YTD_USD);
+    map.set(isin, {
+      isin,
+      ticker: sample.Ticker || sample.ISIN,
+      name: sample.Name,
+      manager: sample.Manager,
+      category: sample.Category,
+      feeBps: totalAum
+        ? rs.reduce((a, b) => a + b.Fee_bps * b.AUM_USD, 0) / totalAum
+        : sample.Fee_bps,
+      ytdNnb: rs.reduce((a, b) => a + b.NNB_YTD_USD, 0),
+      ytdNnbf: rs.reduce((a, b) => a + b.NNBF_YTD_USD, 0),
+      aum: totalAum,
+      byAfp: [...am.entries()]
+        .map(([AFP, ytdNnb]) => ({ AFP, ytdNnb }))
+        .sort((a, b) => b.ytdNnb - a.ytdNnb),
+    });
+  }
+  return [...map.values()].sort((a, b) => Math.abs(b.aum) - Math.abs(a.aum));
+}
