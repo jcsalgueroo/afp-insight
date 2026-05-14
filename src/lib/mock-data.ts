@@ -1040,13 +1040,58 @@ function flowRows(
 
 /** NNB by manager (all non-zero), sorted descending. */
 export function getNnbByManager(afps: AFP[], bucket: Bucket, period: Period, date: string) {
-  const rows = flowRows(afps, bucket, period, date);
+  // Use snapshot columns so totals match KPI methodology.
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      r.Date === date &&
+      (afps.length === 0 || afps.includes(r.AFP)) &&
+      bucketOf(r) === bucket,
+  );
+  const field: keyof MasterRow = period === "YTD" ? "NNB_YTD_USD" : "NNB_Month_USD";
   const m = new Map<Manager, number>();
-  for (const r of rows) m.set(r.Manager, (m.get(r.Manager) ?? 0) + r.NNB_USD);
+  for (const r of rows) m.set(r.Manager, (m.get(r.Manager) ?? 0) + (r[field] as number));
   return [...m.entries()]
     .map(([Manager, NNB]) => ({ Manager: Manager as string, NNB }))
     .filter((d) => d.NNB !== 0)
     .sort((a, b) => b.NNB - a.NNB);
+}
+
+/**
+ * BlackRock NNB or NNBF by AFP, split by bucket (ETF / Mutual Fund / Money Market).
+ * Uses snapshot columns (NNB_YTD_USD / NNB_Month_USD / NNBF_YTD_USD / NNBF_Month_USD)
+ * so totals reconcile with the BLK KPI cards.
+ */
+export function getBlkFlowsByAfp(
+  metric: "NNB" | "NNBF",
+  period: Period,
+  date: string,
+) {
+  const field: keyof MasterRow =
+    metric === "NNB"
+      ? period === "YTD"
+        ? "NNB_YTD_USD"
+        : "NNB_Month_USD"
+      : period === "YTD"
+        ? "NNBF_YTD_USD"
+        : "NNBF_Month_USD";
+  const rows = MASTER_DATA.filter((r) => r.Date === date && r.Manager === "BlackRock");
+  const out = AFPS.map((afp) => {
+    const row: { AFP: AFP; total: number } & Record<Bucket, number> = {
+      AFP: afp,
+      ETF: 0,
+      "Mutual Fund": 0,
+      "Money Market": 0,
+      total: 0,
+    };
+    for (const r of rows.filter((r) => r.AFP === afp)) {
+      const b = bucketOf(r);
+      const v = r[field] as number;
+      row[b] += v;
+      row.total += v;
+    }
+    return row;
+  });
+  return out.filter((r) => r.ETF !== 0 || r["Mutual Fund"] !== 0 || r["Money Market"] !== 0);
 }
 
 /** Cumulative NNB stacked bars: by Manager (X) stacked by Category, or vice versa. */
