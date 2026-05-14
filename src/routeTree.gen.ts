@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UcitsRouteImport } from './routes/ucits'
+import { Route as TargetsRouteImport } from './routes/targets'
 import { Route as SecuritiesRouteImport } from './routes/securities'
 import { Route as RevenueRouteImport } from './routes/revenue'
 import { Route as PerformanceRouteImport } from './routes/performance'
@@ -22,6 +23,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const UcitsRoute = UcitsRouteImport.update({
   id: '/ucits',
   path: '/ucits',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TargetsRoute = TargetsRouteImport.update({
+  id: '/targets',
+  path: '/targets',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SecuritiesRoute = SecuritiesRouteImport.update({
@@ -74,6 +80,7 @@ export interface FileRoutesByFullPath {
   '/performance': typeof PerformanceRoute
   '/revenue': typeof RevenueRoute
   '/securities': typeof SecuritiesRoute
+  '/targets': typeof TargetsRoute
   '/ucits': typeof UcitsRoute
 }
 export interface FileRoutesByTo {
@@ -85,6 +92,7 @@ export interface FileRoutesByTo {
   '/performance': typeof PerformanceRoute
   '/revenue': typeof RevenueRoute
   '/securities': typeof SecuritiesRoute
+  '/targets': typeof TargetsRoute
   '/ucits': typeof UcitsRoute
 }
 export interface FileRoutesById {
@@ -97,6 +105,7 @@ export interface FileRoutesById {
   '/performance': typeof PerformanceRoute
   '/revenue': typeof RevenueRoute
   '/securities': typeof SecuritiesRoute
+  '/targets': typeof TargetsRoute
   '/ucits': typeof UcitsRoute
 }
 export interface FileRouteTypes {
@@ -110,6 +119,7 @@ export interface FileRouteTypes {
     | '/performance'
     | '/revenue'
     | '/securities'
+    | '/targets'
     | '/ucits'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -121,6 +131,7 @@ export interface FileRouteTypes {
     | '/performance'
     | '/revenue'
     | '/securities'
+    | '/targets'
     | '/ucits'
   id:
     | '__root__'
@@ -132,6 +143,7 @@ export interface FileRouteTypes {
     | '/performance'
     | '/revenue'
     | '/securities'
+    | '/targets'
     | '/ucits'
   fileRoutesById: FileRoutesById
 }
@@ -144,6 +156,7 @@ export interface RootRouteChildren {
   PerformanceRoute: typeof PerformanceRoute
   RevenueRoute: typeof RevenueRoute
   SecuritiesRoute: typeof SecuritiesRoute
+  TargetsRoute: typeof TargetsRoute
   UcitsRoute: typeof UcitsRoute
 }
 
@@ -154,6 +167,13 @@ declare module '@tanstack/react-router' {
       path: '/ucits'
       fullPath: '/ucits'
       preLoaderRoute: typeof UcitsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/targets': {
+      id: '/targets'
+      path: '/targets'
+      fullPath: '/targets'
+      preLoaderRoute: typeof TargetsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/securities': {
@@ -224,6 +244,7 @@ const rootRouteChildren: RootRouteChildren = {
   PerformanceRoute: PerformanceRoute,
   RevenueRoute: RevenueRoute,
   SecuritiesRoute: SecuritiesRoute,
+  TargetsRoute: TargetsRoute,
   UcitsRoute: UcitsRoute,
 }
 export const routeTree = rootRouteImport
