@@ -41,6 +41,7 @@ export interface MasterRow {
   Perf_Month: number;
   Perf_YTD: number;
   Asset_Class: string;
+  Domicile: string;
 }
 
 export interface DisplacementRow {
