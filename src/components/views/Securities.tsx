@@ -26,6 +26,9 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 
 export function Securities() {
   const { date, blkOnly } = useDashboard();
+  // closure for hover cell
+  // (date used in AumHoverCell below)
+  ;
   const data = useMemo(
     () => applyFilters(MASTER_DATA, { date, afps: [], blkOnly }),
     [date, blkOnly],
@@ -193,5 +196,45 @@ export function Securities() {
         </div>
       </div>
     </div>
+  );
+}
+
+function AumHoverCell({ row, value }: { row: MasterRow; value: number }) {
+  const breakdown = useMemo(
+    () => getSecurityAumByAfp(row.ISIN, row.Date),
+    [row.ISIN, row.Date],
+  );
+  const total = breakdown.reduce((s, b) => s + b.AUM, 0) || 1;
+  return (
+    <HoverCard openDelay={120} closeDelay={60}>
+      <HoverCardTrigger asChild>
+        <div className="text-right tabular-nums cursor-default">{formatUSD(value)}</div>
+      </HoverCardTrigger>
+      <HoverCardContent align="end" className="w-64 p-3 text-xs">
+        <div className="font-semibold text-sm mb-0.5 truncate">{row.Ticker || row.Name}</div>
+        <div className="text-muted-foreground mb-2 truncate text-[11px]">
+          {row.ISIN} · {formatUSD(total)} total
+        </div>
+        <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+          AUM Org by AFP
+        </div>
+        <div className="space-y-0.5 max-h-56 overflow-auto">
+          {breakdown.map((b) => (
+            <div key={b.AFP} className="flex items-center justify-between gap-2">
+              <span className="truncate">{b.AFP}</span>
+              <span className="font-medium tabular-nums">
+                {formatUSD(b.AUM)}{" "}
+                <span className="text-muted-foreground">
+                  ({((b.AUM / total) * 100).toFixed(0)}%)
+                </span>
+              </span>
+            </div>
+          ))}
+          {breakdown.length === 0 && (
+            <div className="text-muted-foreground">No holdings.</div>
+          )}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
   );
 }
