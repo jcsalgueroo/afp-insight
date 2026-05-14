@@ -14,6 +14,7 @@ import {
   Legend,
   ReferenceLine,
   LabelList,
+  ReferenceArea,
 } from "recharts";
 import {
   brandColor,
@@ -57,6 +58,21 @@ const PERIOD_TOGGLE = [
   { value: "Month" as const, label: "Month" },
   { value: "YTD" as const, label: "YTD" },
 ] as const;
+
+type Quadrant = "All" | "NE" | "SE" | "SW" | "NW";
+const QUADRANT_TOGGLE = [
+  { value: "All" as const, label: "All" },
+  { value: "NE" as const, label: "NE" },
+  { value: "SE" as const, label: "SE" },
+  { value: "SW" as const, label: "SW" },
+  { value: "NW" as const, label: "NW" },
+] as const;
+const QUADRANT_LABELS: Record<Exclude<Quadrant, "All">, string> = {
+  NE: "Performance Chasing",
+  SE: "Profit Taking",
+  SW: "Stopping Losses",
+  NW: "High Conviction",
+};
 
 const SORT_TOGGLE = [
   { value: "Manager" as const, label: "By Manager" },
@@ -207,13 +223,24 @@ export function Flows() {
   const [perfAfps, setPerfAfps] = useState<AFP[]>([]);
   const [perfManagers, setPerfManagers] = useState<Manager[]>([]);
   const [perfCats, setPerfCats] = useState<Category[]>([]);
+  const [perfQuadrant, setPerfQuadrant] = useState<Quadrant>("All");
   const scatter = useMemo(
     () => getScatterFiltered(perfAfps, perfManagers, perfCats, perfPeriod, date, perfBucket),
     [perfAfps, perfManagers, perfCats, perfPeriod, date, perfBucket],
   );
+  const scatterFiltered = useMemo(() => {
+    if (perfQuadrant === "All") return scatter;
+    return scatter.filter((s) => {
+      const x = s.Perf, y = s.NNB;
+      if (perfQuadrant === "NE") return x >= 0 && y >= 0;
+      if (perfQuadrant === "SE") return x >= 0 && y <= 0;
+      if (perfQuadrant === "SW") return x <= 0 && y <= 0;
+      return x <= 0 && y >= 0;
+    });
+  }, [scatter, perfQuadrant]);
   const scatterByManager = MANAGERS.map((m) => ({
     manager: m,
-    data: scatter.filter((s) => s.Manager === m),
+    data: scatterFiltered.filter((s) => s.Manager === m),
   })).filter((s) => s.data.length > 0);
 
   // 4) Flows by Category
