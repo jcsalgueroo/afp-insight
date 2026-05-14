@@ -29,6 +29,7 @@ import {
   getNnbByManager,
   getScatterFiltered,
   getTopBottomSecurities,
+  getTopBottomSecuritiesNnbf,
   getYtdByManagerSeries,
   managerColor,
   MANAGERS,
@@ -185,7 +186,7 @@ function TopBottomTooltip({
       <div className="font-semibold">{d.manager}</div>
       <div className="text-muted-foreground">{d.label}</div>
       <div className="flex justify-between gap-4 pt-1 border-t border-border">
-        <span className="text-muted-foreground">Total NNB</span>
+        <span className="text-muted-foreground">Total</span>
         <span className="tabular-nums font-medium">{formatUSD(d.nnb)}</span>
       </div>
       <div className="pt-1 space-y-0.5">
@@ -277,6 +278,16 @@ export function Flows() {
   const tb = useMemo(
     () => getTopBottomSecurities(tbAfps, tbManagers, tbBucket, tbPeriod, date),
     [tbAfps, tbManagers, tbBucket, tbPeriod, date],
+  );
+
+  // 5b) Top/Bottom securities by NNBF (independent filters)
+  const [tbfBucket, setTbfBucket] = useState<Bucket>("ETF");
+  const [tbfPeriod, setTbfPeriod] = useState<"Month" | "YTD">("YTD");
+  const [tbfAfps, setTbfAfps] = useState<AFP[]>([]);
+  const [tbfManagers, setTbfManagers] = useState<Manager[]>([]);
+  const tbf = useMemo(
+    () => getTopBottomSecuritiesNnbf(tbfAfps, tbfManagers, tbfBucket, tbfPeriod, date),
+    [tbfAfps, tbfManagers, tbfBucket, tbfPeriod, date],
   );
 
   // 6) Monthly bucket flows
@@ -522,7 +533,7 @@ export function Flows() {
         </div>
       </CardShell>
 
-      {/* 5 + 6) Top/Bottom 5 + Monthly Flows by Bucket — side by side */}
+      {/* 5 + 5b) Top/Bottom 5 NNB + Top/Bottom 5 NNBF — side by side */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       <CardShell
         title="Top 5 / Bottom 5 Securities by Flows"
@@ -573,6 +584,56 @@ export function Flows() {
       </CardShell>
 
       <CardShell
+        title="Top 5 / Bottom 5 Securities by NNBF"
+        subtitle={tbfBucket === "ETF" ? "ETFs by Ticker" : "Mutual Funds by Name"}
+        right={
+          <>
+            <SegmentedToggle options={BUCKET_TOGGLE} value={tbfBucket} onChange={setTbfBucket} />
+            <SegmentedToggle options={PERIOD_TOGGLE} value={tbfPeriod} onChange={setTbfPeriod} />
+            <AfpFilterPopover value={tbfAfps} onChange={setTbfAfps} />
+            <MultiSelectPopover
+              label="Managers"
+              options={MANAGERS}
+              value={tbfManagers}
+              onChange={setTbfManagers}
+            />
+          </>
+        }
+      >
+        <div className="h-96">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={tbf}
+              layout="vertical"
+              margin={{ top: 8, right: 16, left: 16, bottom: 8 }}
+            >
+              <CartesianGrid stroke={CHART_COLORS.grid} horizontal={false} />
+              <XAxis type="number" tickFormatter={(v) => formatUSD(v)} stroke="#999" fontSize={11} />
+              <YAxis
+                type="category"
+                dataKey="label"
+                stroke="#999"
+                fontSize={tbfBucket === "ETF" ? 11 : 10}
+                width={tbfBucket === "ETF" ? 80 : 220}
+              />
+              <Tooltip content={<TopBottomTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+              <ReferenceLine x={0} stroke="#999" />
+              <Bar dataKey="nnb" isAnimationActive={false}>
+                {tbf.map((d, i) => (
+                  <Cell
+                    key={i}
+                    fill={d.nnb >= 0 ? CHART_COLORS.positive : CHART_COLORS.negative}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </CardShell>
+      </div>
+
+      {/* 6) Monthly Flows by Bucket — full width */}
+      <CardShell
         title="Monthly Flows by Bucket"
         subtitle="NNB stacked by ETF / Mutual Fund / Money Market (signed)"
         right={<AfpFilterPopover value={monthlyAfps} onChange={setMonthlyAfps} />}
@@ -597,7 +658,6 @@ export function Flows() {
           </ResponsiveContainer>
         </div>
       </CardShell>
-      </div>
 
       {/* 7) YTD NNB & NNBF by Manager — diverging stacked bars */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
