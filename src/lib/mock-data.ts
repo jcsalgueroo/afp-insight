@@ -1927,10 +1927,8 @@ export interface CumPerfPoint {
 }
 
 export function getCumulativePerformanceSeries(
-  portfolioTypes: PortfolioType[],
   asOf: string,
 ): CumPerfPoint[] {
-  const ptSet = portfolioTypes.length ? new Set(portfolioTypes) : null;
   const months = MONTHS.filter((m) => m >= PERF_BASELINE_MONTH && (!asOf || m <= asOf));
   if (!months.length) return [];
 
@@ -1946,14 +1944,12 @@ export function getCumulativePerformanceSeries(
 
   for (let i = 1; i < months.length; i++) {
     const m = months[i];
-    const monthRows = MASTER_DATA.filter(
-      (r) => r.Date === m && (!ptSet || ptSet.has(r.Portfolio_Type)),
-    );
+    const monthRows = MASTER_DATA.filter((r) => r.Date === m);
     const point: CumPerfPoint = { month: m };
     for (const s of series) {
       const rs = s === "System" ? monthRows : monthRows.filter((r) => r.AFP === s);
-      const wp = wavg(rs, (r) => r.Perf_Month); // decimal (0.1756 = 17.56%)
-      values[s] = values[s] * (1 + wp);
+      const wp = wavg(rs, (r) => r.Perf_Month); // percent units (17.56 = 17.56%)
+      values[s] = values[s] * (1 + wp / 100);
       point[s] = values[s];
     }
     out.push(point);
