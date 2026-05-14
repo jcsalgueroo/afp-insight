@@ -15,6 +15,7 @@ import {
   Legend,
   ResponsiveContainer,
   CartesianGrid,
+  ReferenceLine,
 } from "recharts";
 import { ChevronDown, Check } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -348,7 +349,7 @@ export function Scorecard() {
                     formatter={(v: number, n: string) => [formatUSD(v), n]}
                   />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <ReferenceLineZero />
+                  <ReferenceLine y={0} stroke="#999" />
                   {BUCKETS.map((b) => (
                     <Bar key={b} dataKey={b} stackId="signed" fill={BUCKET_COLOR[b]} isAnimationActive={false} />
                   ))}
