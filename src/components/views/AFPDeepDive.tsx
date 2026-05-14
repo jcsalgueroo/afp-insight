@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import { Fragment, createContext, useContext, useMemo, useState } from "react";
 import {
   Treemap,
   ResponsiveContainer,
@@ -35,7 +35,6 @@ import {
   type PortfolioType,
 } from "@/lib/mock-data";
 import { useDashboard } from "@/lib/dashboard-store";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AfpFilterPopover } from "@/components/widgets/AfpFilterPopover";
