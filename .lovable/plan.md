@@ -1,64 +1,73 @@
-# Flows Intelligence — Chart Overhaul
+# Performance Analytics screen + Flows quadrant labels
 
-Scope: `src/components/views/Flows.tsx` (UI) and `src/lib/mock-data.ts` (selectors). No business-logic / data-model changes.
+## 1. Sidebar + route
+- `src/components/shell/Sidebar.tsx`: insert new entry **"Performance Analytics"** (icon: `LineChart` from lucide-react) between **Flows Intelligence** and **Revenue & Fees Analytics**.
+- New route `src/routes/performance.tsx` → renders `PerformanceAnalytics` view.
+- New view file `src/components/views/PerformanceAnalytics.tsx`.
 
-## 1. NNB by Manager — donut → bar chart
+## 2. Data helpers (in `src/lib/mock-data.ts`)
+All helpers operate on `MASTER_DATA` (all asset types — ETF, MF, MM) and respect the global As‑Of date from `useDashboard`.
 
-- Replace `RPieChart` with a horizontal `BarChart` (`layout="vertical"`).
-- Keep current toggles: Bucket (ETF/MF/MM), Period (Month/YTD), AFP filter.
-- Reuse `getNnbDonut` (rename internally to a manager-level NNB selector — same shape `{Manager, NNB}`) but **drop "Others"** and **return all managers with NNB ≠ 0**, sorted by NNB descending.
-- Diverging around 0: `ReferenceLine x={0}`, bar fill = `managerColor(Manager)`; positives extend right, negatives left.
-- Remove the donut center label (Total NNB); show total as small text in the card header (right side or subtitle).
+- `getCumulativePerformanceSeries(portfolioTypes: PortfolioType[], asOf: string)`
+  - Filter rows by `Portfolio_Type ∈ portfolioTypes` (empty = all).
+  - For each month from `2025-12` through `asOf` (sorted), build 6 series: one per AFP + `"System"`.
+  - For each AFP at month M: weighted average of `Perf_Month` using `AUM_USD` as weights across that AFP's rows in M (within selected portfolios). System = same calculation pooling all AFPs.
+  - Cumulative value: starts at **100** at `2025-12`; each subsequent month V_t = V_{t-1} × (1 + wavg_t). `Perf_Month` is treated as a percent (e.g. 1.23 → 1.23%) — confirm by the same convention already used elsewhere (`Perf_YTD` is shown with `.toFixed(2)%`).
+  - Returns `{ month, [AFP1]…[AFPn], System }[]`.
 
-## 2. Cumulative NNB — prune zero rows / stack keys
+- `getCategoryAfpBubbles(asOf, assetClass: "Equity"|"Fixed Income")`
+  - For each AFP and each Category present in that AFP at `asOf` (filtered to `Asset_Class = assetClass`):
+    - x = sum(AUM in category for that AFP) / sum(AUM for that AFP at asOf, all asset classes) → portfolio weight (decimal)
+    - y = AUM-weighted average of `Perf_YTD` in that category for that AFP
+    - label = Category, group = AFP
+  - Plus the same calculation for the System (all AFPs aggregated). System always returned.
+  - Output grouped by AFP/System for separate `<Scatter>` series with distinct colors.
 
-- In `getCumulativeNnbStacked`, after building `data`:
-  - Filter out X categories whose row sum across all stack keys is 0.
-  - Filter out stack keys whose total across all rows is 0 (before / instead of the existing top-N collapse, so empty keys never become "Others").
-- Behavior: ETF bucket hides Allianz on the X axis (Manager mode) and hides MM-only categories (already handled), and similarly hides empty stack keys.
+- `getAssetClassWeightVsPerf(asOf, assetClass)`
+  - For each AFP + System: x = AUM weight of `assetClass` within total portfolio at asOf, y = AUM-weighted `Perf_YTD` of that asset class. One bubble each.
 
-## 3. Performance vs Flows — ETF/MF toggle + per-security bubbles + rich hover
+- `getCategoryDispersion(asOf, assetClass, category)`
+  - System point: x = system weight in category, y = system YTD wavg.
+  - One bubble per AFP at (afp weight in category, afp YTD wavg in category). Empty if AFP doesn't hold the category.
 
-- Add `SegmentedToggle` for `ETF` | `Mutual Fund` (default ETF) — replaces nothing, sits alongside existing Period/AFP/Managers/Categories filters.
-- Update `getScatterFiltered` to accept `bucket: "ETF" | "Mutual Fund"` and filter rows via `bucketOf(r) === bucket`. Each row already aggregates per ISIN so each bubble is one security; include `Ticker` (via `tickerOf(isin)`) and `Bucket` in the returned shape.
-- Color bubbles by Manager (existing `scatterByManager` grouping works).
-- Custom Recharts `Tooltip content={...}` showing:
-  - Manager (bold)
-  - Ticker (ETF) or Name (MF)
-  - AUM — `formatUSD`
-  - Performance — `${perf.toFixed(2)}%` (NO dollar sign, percentage formatting)
-- Y axis still NNB, X axis still Perf%.
+## 3. View layout (`PerformanceAnalytics.tsx`)
+Reuses `CardShell` pattern, `SegmentedToggle`, `AfpFilterPopover`, `MultiSelectPopover`, recharts.
 
-## 4. Move "Flows by Category — ETF vs MF" directly below Performance vs Flows
+```text
+┌─────────────────────────────────────────────────────────┐
+│ Cumulative Performance (line chart)                     │
+│   right: Portfolio filter (defaults: all)               │
+│   5 AFP lines + System line, indexed to 100 at 2025-12  │
+├──────────────────────────┬──────────────────────────────┤
+│ Category positioning     │ Asset-class positioning      │
+│ Scatter: weight × YTD    │ Scatter: weight × YTD        │
+│ bubbles per Category×AFP │ one bubble per AFP+System    │
+│ toggle Equity / FI       │ toggle Equity / FI           │
+│ AFP filter (single sel)  │                              │
+│ + System always shown    │                              │
+├─────────────────────────────────────────────────────────┤
+│ Category dispersion vs System                           │
+│ Scatter, ReferenceLine x=systemWeight, y=systemYTD     │
+│ Equity/FI toggle + Category single-select filter        │
+└─────────────────────────────────────────────────────────┘
+```
 
-- Reorder JSX in `Flows.tsx` so the `Flows by Category` `CardShell` renders immediately after `Performance vs Flows`, before Top/Bottom 5 and the rest.
+- Portfolio filter for chart 1: a `MultiSelectPopover` over `PORTFOLIO_TYPES`, label "Portfolios". Empty = all.
+- AFP single-select for chart 2: small popover (or `Select`) listing each AFP; System bubbles always rendered as a separate `<Scatter>` series with distinct color (`CHART_COLORS.blk` or a system gray).
+- Category single-select for chart 4: `Select` of `CATEGORIES`.
+- Colors: reuse `managerColor` for AFPs is wrong here — AFPs need their own palette. Add `afpColor(afp)` derived from `CHART_COLORS` cycling, plus a fixed `SYSTEM_COLOR` token.
 
-## 5. Top 5 / Bottom 5 — hover card with AFP breakdown
+## 4. Flows Intelligence — Performance vs Flows quadrants (`src/components/views/Flows.tsx`)
+- Add 4 quadrant labels rendered as recharts `<Label>` inside `<ReferenceArea>` (or absolute-positioned overlays):
+  - NE = "Performance Chasing"
+  - SE = "Profit Taking"
+  - SW = "Stopping Losses"
+  - NW = "High Conviction"
+- Add a `SegmentedToggle` (or small `Select`) "Quadrant: All / NE / SE / SW / NW" in the card header.
+- When a quadrant is selected, filter `scatter` data to points with the matching sign of `Perf` (x) and `NNB` (y) before grouping by manager. "All" keeps current behavior.
 
-- Extend `getTopBottomSecurities` rows with `isin` and `afpBreakdown: {AFP, NNB}[]` (sorted by `|NNB|` desc, computed from `flowRows` filtered by ISIN).
-- Replace default Recharts tooltip with a custom `content` component:
-  - Manager
-  - Label (Ticker or Name) — already present
-  - NNB total — `formatUSD`
-  - Table: AFP → NNB (signed), one row per AFP that traded.
-
-## 6. Monthly Flows by Bucket — diverging stacked bars
-
-- Recharts stacks signed values natively. Add `ReferenceLine y={0}`. Confirm bars use a single `stackId` (already do). Negative bucket totals will render below zero automatically; no selector change required (values are already signed).
-- Add `stackOffset="sign"` on `BarChart` to get true diverging stacking (positives up, negatives down per bar).
-
-## 7. YTD NNB by Manager + YTD NNBF by Manager — stacked diverging bars (per-month)
-
-- Replace `AreaChart` with `BarChart` + `stackOffset="sign"` and `ReferenceLine y={0}`.
-- Update `getYtdByManagerSeries` to return **per-month signed values** (not the running cumulative). Same shape `{ data: [{m, [brand]: monthlyNNB}], brands }`. This way managers with negative monthly NNB appear below zero; the YTD framing is preserved by spanning all YTD months on the X axis.
-- Same for NNBF (already uses the same selector with `metric="NNBF"`).
-- Brands still chosen by absolute YTD totals; bar fill = `brandColor(b)`; legend unchanged.
-
-## Technical notes
-
-- Files touched:
-  - `src/components/views/Flows.tsx` — JSX reorder, chart-type swaps, custom tooltip components, new ETF/MF toggle state.
-  - `src/lib/mock-data.ts` — `getNnbDonut` (rename/repurpose for full bar list), `getCumulativeNnbStacked` (zero pruning), `getScatterFiltered` (bucket param + ticker), `getTopBottomSecurities` (afpBreakdown), `getYtdByManagerSeries` (per-month, not cumulative).
-- All new colors from existing `managerColor` / `brandColor` / `BUCKET_COLOR` helpers — no raw hex.
-- Custom tooltips render with existing `tooltipStyle` look-and-feel inside a `bg-popover border border-border rounded-md shadow-md p-2 text-xs` container.
-- No changes to other views, routes, data-loader, or shell components.
+## 5. Notes / conventions
+- All numbers reuse existing formatters (`formatUSD`, `.toFixed(2)%`).
+- No DB/schema changes; pure frontend over already-loaded `MASTER_DATA`.
+- New route registered automatically via TanStack file-based routing (do not edit `routeTree.gen.ts`).
+- Add `LineChart`/`Line` import where needed in the new view.
