@@ -286,6 +286,13 @@ export function managerColor(m: Manager) {
   return ACCENT_PALETTE[(idx >= 0 ? idx + 1 : 0) % ACCENT_PALETTE.length];
 }
 
+export const SYSTEM_COLOR = "#111111";
+export function afpColor(afp: AFP | "System") {
+  if (afp === "System") return SYSTEM_COLOR;
+  const idx = AFPS.indexOf(afp);
+  return ACCENT_PALETTE[(idx >= 0 ? idx : 0) % ACCENT_PALETTE.length];
+}
+
 // ---------- Brand & bucket helpers ----------
 
 export type Bucket = "ETF" | "Mutual Fund" | "Money Market";
