@@ -1,4 +1,4 @@
-import { Fragment, createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useMemo, useState } from "react";
 import {
   Treemap,
   ResponsiveContainer,
@@ -18,11 +18,9 @@ import { Check, ChevronDown, ChevronRight, Search } from "lucide-react";
 import {
   AFPS,
   CHART_COLORS,
-  MATCH_TYPES,
   PORTFOLIO_TYPES,
   categoryColor,
   categoryAssetClass,
-  categoryOfIsin,
   formatBps,
   formatPct,
   formatUSD,
@@ -30,14 +28,11 @@ import {
   getAfpCompositionDonut,
   getAfpCompositionLeafDonut,
   getAfpPositions,
-  getDisplacement,
   getNnbByManagerStacked,
   type AFP,
   type Bucket,
   type Category,
-  type MatchType,
   type PortfolioType,
-  type DisplacementRow,
 } from "@/lib/mock-data";
 import { useDashboard } from "@/lib/dashboard-store";
 import { Badge } from "@/components/ui/badge";
@@ -187,19 +182,6 @@ export function AFPDeepDive() {
       return out;
     });
   }, [nnbStacked]);
-
-  // Displacement
-  const [matchFilter, setMatchFilter] = useState<MatchType | "All">("All");
-  const opps = useMemo(() => getDisplacement(primaryAfp, matchFilter), [primaryAfp, matchFilter]);
-  const dispGroups = useMemo(() => groupDisplacement(opps), [opps]);
-  const [openAC, setOpenAC] = useState<Set<string>>(new Set());
-  const [openCat, setOpenCat] = useState<Set<string>>(new Set());
-  const toggleSet = (s: Set<string>, key: string, setter: (n: Set<string>) => void) => {
-    const n = new Set(s);
-    if (n.has(key)) n.delete(key);
-    else n.add(key);
-    setter(n);
-  };
 
   // Positions table
   const [posBucket, setPosBucket] = useState<Bucket>("ETF");
