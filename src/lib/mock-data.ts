@@ -1481,14 +1481,16 @@ export function getPenetrationHeatmap(opts: {
   bucket: Bucket | "All";
   portfolioTypes: PortfolioType[];
   date: string;
+  assetClass?: "All" | "Equity" | "Fixed Income";
 }) {
-  const { bucket, portfolioTypes, date } = opts;
+  const { bucket, portfolioTypes, date, assetClass = "All" } = opts;
   const ptSet = portfolioTypes.length ? new Set(portfolioTypes) : null;
   const rows = MASTER_DATA.filter(
     (r) =>
       r.Date === date &&
       (bucket === "All" || bucketOf(r) === bucket) &&
-      (!ptSet || ptSet.has(r.Portfolio_Type)),
+      (!ptSet || ptSet.has(r.Portfolio_Type)) &&
+      (assetClass === "All" || categoryAssetClass(r.Category) === assetClass),
   );
 
   // Sort categories by total AUM desc
@@ -1497,6 +1499,7 @@ export function getPenetrationHeatmap(opts: {
     catTotals.set(r.Category, (catTotals.get(r.Category) ?? 0) + r.AUM_USD);
   const categories = [...CATEGORIES]
     .filter((c) => (catTotals.get(c) ?? 0) > 0)
+    .filter((c) => assetClass === "All" || categoryAssetClass(c) === assetClass)
     .sort((a, b) => (catTotals.get(b) ?? 0) - (catTotals.get(a) ?? 0));
   const afps = [...AFPS];
 
@@ -1543,15 +1546,17 @@ export function getBelowWeightSecurities(opts: {
   portfolioTypes: PortfolioType[];
   date: string;
   threshold?: number;
+  assetClass?: "All" | "Equity" | "Fixed Income";
 }): BelowWeightRow[] {
-  const { bucket, portfolioTypes, date, threshold = 0.65 } = opts;
-  const { categories, afps, cells } = getPenetrationHeatmap({ bucket, portfolioTypes, date });
+  const { bucket, portfolioTypes, date, threshold = 0.65, assetClass = "All" } = opts;
+  const { categories, afps, cells } = getPenetrationHeatmap({ bucket, portfolioTypes, date, assetClass });
   const ptSet = portfolioTypes.length ? new Set(portfolioTypes) : null;
   const rows = MASTER_DATA.filter(
     (r) =>
       r.Date === date &&
       (bucket === "All" || bucketOf(r) === bucket) &&
-      (!ptSet || ptSet.has(r.Portfolio_Type)),
+      (!ptSet || ptSet.has(r.Portfolio_Type)) &&
+      (assetClass === "All" || categoryAssetClass(r.Category) === assetClass),
   );
 
   // YTD NNB by ISIN+AFP
@@ -1560,7 +1565,8 @@ export function getBelowWeightSecurities(opts: {
     (r) =>
       ytdMonths.includes(r.Date) &&
       (bucket === "All" || bucketOf(r) === bucket) &&
-      (!ptSet || ptSet.has(r.Portfolio_Type)),
+      (!ptSet || ptSet.has(r.Portfolio_Type)) &&
+      (assetClass === "All" || categoryAssetClass(r.Category) === assetClass),
   );
   const ytdKey = (afp: AFP, isin: string) => `${afp}|${isin}`;
   const ytdNnb = new Map<string, number>();
