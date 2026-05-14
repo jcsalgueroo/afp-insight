@@ -29,6 +29,7 @@ import {
   getNnbByManager,
   getScatterFiltered,
   getTopBottomSecurities,
+  getTopBottomSecuritiesNnbf,
   getYtdByManagerSeries,
   managerColor,
   MANAGERS,
@@ -277,6 +278,16 @@ export function Flows() {
   const tb = useMemo(
     () => getTopBottomSecurities(tbAfps, tbManagers, tbBucket, tbPeriod, date),
     [tbAfps, tbManagers, tbBucket, tbPeriod, date],
+  );
+
+  // 5b) Top/Bottom securities by NNBF (independent filters)
+  const [tbfBucket, setTbfBucket] = useState<Bucket>("ETF");
+  const [tbfPeriod, setTbfPeriod] = useState<"Month" | "YTD">("YTD");
+  const [tbfAfps, setTbfAfps] = useState<AFP[]>([]);
+  const [tbfManagers, setTbfManagers] = useState<Manager[]>([]);
+  const tbf = useMemo(
+    () => getTopBottomSecuritiesNnbf(tbfAfps, tbfManagers, tbfBucket, tbfPeriod, date),
+    [tbfAfps, tbfManagers, tbfBucket, tbfPeriod, date],
   );
 
   // 6) Monthly bucket flows
