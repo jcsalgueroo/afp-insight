@@ -41,8 +41,6 @@ const AC_TOGGLE = [
 
 type AssetClass = "Equity" | "Fixed Income";
 
-const tooltipStyle = { fontSize: 12, border: "1px solid #E5E5E5", borderRadius: 4 } as const;
-
 type HoldingsPayload = {
   group?: string;
   cat?: string;
