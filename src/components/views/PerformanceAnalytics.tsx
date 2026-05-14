@@ -17,7 +17,6 @@ import {
   AFPS,
   CATEGORIES,
   CHART_COLORS,
-  PORTFOLIO_TYPES,
   afpColor,
   getAssetClassWeightVsPerf,
   getCategoryAfpBubbles,
@@ -25,11 +24,9 @@ import {
   getCumulativePerformanceSeries,
   type AFP,
   type Category,
-  type PortfolioType,
 } from "@/lib/mock-data";
 import { formatUSD } from "@/lib/mock-data";
 import { useDashboard } from "@/lib/dashboard-store";
-import { MultiSelectPopover } from "@/components/widgets/MultiSelectPopover";
 import { SegmentedToggle } from "@/components/widgets/SegmentedToggle";
 import {
   Select,
@@ -142,11 +139,7 @@ export function PerformanceAnalytics() {
   const { date } = useDashboard();
 
   // 1) Cumulative performance line
-  const [portfolios, setPortfolios] = useState<PortfolioType[]>([]);
-  const cumData = useMemo(
-    () => getCumulativePerformanceSeries(portfolios, date),
-    [portfolios, date],
-  );
+  const cumData = useMemo(() => getCumulativePerformanceSeries(date), [date]);
   const cumSeries: ("System" | AFP)[] = ["System", ...AFPS];
 
   // 2) Category × AFP scatter
@@ -223,14 +216,6 @@ export function PerformanceAnalytics() {
       <CardShell
         title="Cumulative Portfolio Performance"
         subtitle={`Indexed to 100 at Dec 2025 · AUM-weighted monthly performance`}
-        right={
-          <MultiSelectPopover
-            label="Portfolios"
-            options={PORTFOLIO_TYPES}
-            value={portfolios}
-            onChange={setPortfolios}
-          />
-        }
       >
         <div className="h-96">
           <ResponsiveContainer width="100%" height="100%">

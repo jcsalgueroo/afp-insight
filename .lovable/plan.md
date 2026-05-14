@@ -1,52 +1,37 @@
-# Performance Analytics — math fix + richer hover cards
+## Root cause
 
-## 1. Cumulative Portfolio Performance — math fix
-File: `src/lib/mock-data.ts`, `getCumulativePerformanceSeries`.
+`Perf_Month` in `MasterRow` is **not** the raw decimal from the dataset — `src/lib/data-loader.ts` line 77 multiplies the source column by 100 on ingest:
 
-`Perf_Month` is a plain decimal (0.1756 = 17.56%), not a percent.
-- Change line 1956 from `values[s] * (1 + wp / 100)` to `values[s] * (1 + wp)`.
-- Weighting stays AUM-weighted via `AUM_USD` (the field used as "AUM Org" throughout the app — confirm same source).
-- No change to `getCumulativePerformanceSeries` signature; the line chart in `PerformanceAnalytics.tsx` keeps current axis/format.
+```ts
+const perfMonth = num(r.month_performance_usd) * 100;
+```
 
-Note: `Perf_YTD` continues to be treated as percent units (used in scatter Y axes shown as `xx.xx%`). Only `Perf_Month` math is corrected. Flag: if `Perf_YTD` is also a decimal in the source, it would need the same correction — call this out and ask if the YTD scatter values currently look 100× too large.
+So by the time `getCumulativePerformanceSeries` reads `r.Perf_Month`, a 17.56% return is stored as `17.56`, not `0.1756`. Doing `value × (1 + 17.56)` then explodes the cumulative line — matching the symptom you described. Last turn we "fixed" the math the wrong way based on the assumption that `Perf_Month` was still decimal in memory.
 
-## 2. Category Positioning by AFP — rich hover card
-File: `src/components/views/PerformanceAnalytics.tsx`, `src/lib/mock-data.ts`.
+The other screens (Scorecard, AFP Deep Dive, etc.) already depend on `Perf_Month` being in percent units (they format it as `xx.xx%` directly). Changing the loader would break them. The right fix is local to the cumulative calculation.
 
-Add a custom recharts `<Tooltip content={...}>` showing for the hovered bubble:
-- AFP name
-- Category name
-- Category weight (% of AFP total portfolio AUM, current month)
-- AUM-weighted YTD performance for AFP × Category
-- Top 5 holdings in that AFP × Category at `asOf`, ranked by `AUM_USD`, with: Ticker/ISIN/Name (use Name when available else Ticker), `AUM_USD` formatted via `formatUSD`.
+## Changes
 
-Data plumbing: extend `CategoryAfpBubble` (or attach a parallel lookup) so each bubble payload carries `topHoldings: { name: string; aum: number }[]` precomputed in `getCategoryAfpBubbles`. Avoid recomputing inside the tooltip render.
+### 1. `src/lib/mock-data.ts` — `getCumulativePerformanceSeries`
 
-For the System group: top 5 across all AFPs in that category.
+- Restore percent-aware compounding: `values[s] = values[s] * (1 + wp / 100)`. The weighted average still uses `AUM_USD` per AFP (per-AFP scope, which matches your confirmation). System line uses all rows that month.
+- Remove the `portfolioTypes` parameter and the `ptSet` filter — no longer needed. Always compute across all portfolio types.
+- Keep baseline = 100 at `2025-12`.
 
-## 3. Asset-Class Weight vs Performance — remove labels, add hover card
-File: `src/components/views/PerformanceAnalytics.tsx`.
+### 2. `src/components/views/PerformanceAnalytics.tsx` — Cumulative card
 
-- Remove the per-bubble `<LabelList dataKey="group">` (the chip showing AFP next to the dot).
-- Keep the legend (one entry per AFP + System) so colors are still readable. If user wants the legend removed too, easy follow-up — confirm.
-- Add a custom tooltip showing: AFP name, asset-class weight (%), YTD performance (%).
+- Remove the `portfolios` state and the `<MultiSelectPopover>` from the card's `right` slot.
+- Remove the `PORTFOLIO_TYPES` and `PortfolioType` imports if unused after this edit.
+- Update the `getCumulativePerformanceSeries(date)` call signature.
 
-## 4. Category Dispersion vs System — rich hover card
-File: `src/components/views/PerformanceAnalytics.tsx`, `src/lib/mock-data.ts`.
+### 3. No other charts touched
 
-Add a custom tooltip per bubble showing:
-- AFP name (or "System")
-- Selected Category name
-- Weight in category (% of AFP total portfolio AUM)
-- AUM-weighted YTD performance for AFP × Category
-- Top 5 holdings in that AFP × Category at `asOf` ranked by `AUM_USD`.
+The three scatter charts and tooltips stay exactly as they are — this is only about the cumulative line and removing one filter.
 
-Data plumbing: extend `getCategoryDispersion` return so each point includes `topHoldings`. System point shows top 5 across all AFPs in that category.
+## Verification
 
-## 5. Shared bits
-- One reusable `<HoldingsTooltip>` component in `PerformanceAnalytics.tsx` rendering the card (re-used by sections 2 and 4).
-- Holdings list helper `topHoldingsFor(rows, n=5)` in `mock-data.ts` to keep logic in one place.
-- No styling changes outside the tooltip cards; reuse `bg-popover`, `border`, `shadow-md` tokens.
+After the edit, the Dec 2025 anchor stays at 100 and the Jan→Nov 2026 values should land in the ~85–115 range you described, with each AFP's path differing based on its own AUM-weighted monthly returns. I'll spot-check the rendered chart in the preview.
 
-## Open question
-- Should `Perf_YTD` also be reinterpreted as a decimal (so 0.1756 → 17.56%)? Today the scatter axes assume it's already in percent units. If it's actually a decimal in the data, all four scatter charts would need a `* 100` on the Y values.
+## Open question (low risk)
+
+There is no portfolio filter anymore, so the chart always reflects the full multi-portfolio book per AFP. Confirming that's what you want — i.e. one line per AFP aggregated across Type A/B/C/D/E together, not five lines × five portfolios. If you'd rather see per-portfolio breakdowns later, that's a different chart and we can add it as a separate card.
