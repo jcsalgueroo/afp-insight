@@ -104,6 +104,7 @@ function normalizeMaster(rows: Raw[]): MasterRow[] {
         Perf_YTD: perfYtd,
         Asset_Class: s(r.asset_class),
         Domicile: s(r.domicile),
+        Cumulative_Perf: num(r.cumulative_performance),
       };
     });
 }
