@@ -381,11 +381,12 @@ export function Flows() {
       {/* 3) Performance vs Flows */}
       <CardShell
         title="Performance vs Flows"
-        subtitle="Bubble size = AUM · One bubble per security"
+        subtitle="Bubble size = AUM · One bubble per security · Quadrants labeled by behavior"
         right={
           <>
             <SegmentedToggle options={PERF_BUCKET_TOGGLE} value={perfBucket} onChange={setPerfBucket} />
             <SegmentedToggle options={PERIOD_TOGGLE} value={perfPeriod} onChange={setPerfPeriod} />
+            <SegmentedToggle options={QUADRANT_TOGGLE} value={perfQuadrant} onChange={setPerfQuadrant} />
             <AfpFilterPopover value={perfAfps} onChange={setPerfAfps} />
             <MultiSelectPopover
               label="Managers"
@@ -425,6 +426,10 @@ export function Flows() {
               <ZAxis type="number" dataKey="AUM" range={[40, 400]} />
               <ReferenceLine x={0} stroke="#999" />
               <ReferenceLine y={0} stroke="#999" />
+              <ReferenceArea x1={0} x2={1e9} y1={0} y2={1e15} fill="transparent" stroke="none" label={{ value: QUADRANT_LABELS.NE, position: "insideTopRight", fontSize: 11, fill: "#666" }} />
+              <ReferenceArea x1={0} x2={1e9} y1={-1e15} y2={0} fill="transparent" stroke="none" label={{ value: QUADRANT_LABELS.SE, position: "insideBottomRight", fontSize: 11, fill: "#666" }} />
+              <ReferenceArea x1={-1e9} x2={0} y1={-1e15} y2={0} fill="transparent" stroke="none" label={{ value: QUADRANT_LABELS.SW, position: "insideBottomLeft", fontSize: 11, fill: "#666" }} />
+              <ReferenceArea x1={-1e9} x2={0} y1={0} y2={1e15} fill="transparent" stroke="none" label={{ value: QUADRANT_LABELS.NW, position: "insideTopLeft", fontSize: 11, fill: "#666" }} />
               <Tooltip
                 cursor={{ strokeDasharray: "3 3" }}
                 content={<ScatterTooltip period={perfPeriod} />}
