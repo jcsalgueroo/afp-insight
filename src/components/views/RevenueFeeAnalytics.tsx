@@ -32,6 +32,7 @@ import {
   getSecurityFeeNnb,
   managerColor,
   type AFP,
+  type AssetClassFilter,
   type Bucket,
   type Category,
   type Manager,
@@ -40,6 +41,7 @@ import { useDashboard } from "@/lib/dashboard-store";
 import { AfpFilterPopover } from "@/components/widgets/AfpFilterPopover";
 import { MultiSelectPopover } from "@/components/widgets/MultiSelectPopover";
 import { SegmentedToggle } from "@/components/widgets/SegmentedToggle";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import {
   Select,
   SelectContent,
@@ -53,6 +55,11 @@ const BUCKET_TOGGLE = [
   { value: "ETF" as Bucket, label: "ETF" },
   { value: "Mutual Fund" as Bucket, label: "MF" },
   { value: "Money Market" as Bucket, label: "MM" },
+] as const;
+const ASSET_CLASS_TOGGLE = [
+  { value: "All" as AssetClassFilter, label: "All" },
+  { value: "Equity" as AssetClassFilter, label: "Equity" },
+  { value: "Fixed Income" as AssetClassFilter, label: "FI" },
 ] as const;
 const BUCKET_ALL_TOGGLE = [
   { value: "All" as const, label: "All" },
@@ -106,8 +113,8 @@ function ManagerAumFeeCard() {
   const data = useMemo(() => getManagerAumFee([], bucket, date), [bucket, date]);
   return (
     <CardShell
-      title="Top Managers — AUM Org & Weighted Avg Fee"
-      subtitle="Top 10 by AUM Org + Others; line is AUM-weighted fee."
+      title="Top Managers — RRR Org & Weighted Avg Fee"
+      subtitle="Top 10 by RRR Org + Others; dots are AUM-weighted fee per manager."
       right={<SegmentedToggle options={BUCKET_TOGGLE} value={bucket} onChange={setBucket} />}
     >
       <div className="h-80 p-3">
@@ -164,7 +171,7 @@ function ManagerAumFeeCard() {
               }}
             />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Bar yAxisId="left" dataKey="AUM" name="AUM Org">
+            <Bar yAxisId="left" dataKey="RRR" name="RRR Org">
               {data.map((d, i) => (
                 <Cell key={i} fill={brandColor(d.Manager)} />
               ))}
@@ -174,9 +181,11 @@ function ManagerAumFeeCard() {
               type="monotone"
               dataKey="Fee_bps"
               name="Weighted Avg Fee (bps)"
-              stroke={CHART_COLORS.blkAlt}
-              strokeWidth={2}
-              dot={{ r: 3, fill: CHART_COLORS.blkAlt }}
+              stroke="transparent"
+              strokeWidth={0}
+              dot={{ r: 4, fill: CHART_COLORS.blkAlt, stroke: CHART_COLORS.blkAlt }}
+              activeDot={{ r: 5, fill: CHART_COLORS.blkAlt }}
+              isAnimationActive={false}
             />
           </ComposedChart>
         </ResponsiveContainer>
