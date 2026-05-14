@@ -17,7 +17,6 @@ import {
   formatUSD,
   getDroppedProducts,
   getNewProducts,
-  type Bucket,
   type NewProductRow,
 } from "@/lib/mock-data";
 import { useDashboard } from "@/lib/dashboard-store";
