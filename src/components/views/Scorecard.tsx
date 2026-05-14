@@ -313,6 +313,52 @@ export function Scorecard() {
       </div>
 
       {/* Category Weights — grouped bar chart */}
+      {/* BLK NNB / NNBF by AFP — stacked diverging bars */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {([
+          {
+            title: "BlackRock NNB by AFP",
+            subtitle: "Stacked by bucket (ETF / MF / MM); negatives below axis",
+            data: blkNnbByAfp,
+            period: blkNnbPeriod,
+            setPeriod: setBlkNnbPeriod,
+          },
+          {
+            title: "BlackRock NNBF by AFP",
+            subtitle: "Stacked by bucket (ETF / MF / MM); negatives below axis",
+            data: blkNnbfByAfp,
+            period: blkNnbfPeriod,
+            setPeriod: setBlkNnbfPeriod,
+          },
+        ] as const).map((c) => (
+          <CardShell
+            key={c.title}
+            title={c.title}
+            subtitle={c.subtitle}
+            right={<SegmentedToggle options={PERIOD_TOGGLE} value={c.period} onChange={c.setPeriod} />}
+          >
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={c.data as unknown as Array<Record<string, number | string>>} margin={{ top: 8, right: 12, left: 0, bottom: 0 }} stackOffset="sign">
+                  <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
+                  <XAxis dataKey="AFP" stroke="#999" fontSize={11} interval={0} angle={-15} textAnchor="end" height={50} />
+                  <YAxis tickFormatter={(v: number) => formatUSD(v)} stroke="#999" fontSize={11} width={70} />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(v: number, n: string) => [formatUSD(v), n]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <ReferenceLineZero />
+                  {BUCKETS.map((b) => (
+                    <Bar key={b} dataKey={b} stackId="signed" fill={BUCKET_COLOR[b]} isAnimationActive={false} />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardShell>
+        ))}
+      </div>
+
       <CardShell
         title="Category Weights — AFP vs System"
         subtitle="Bar shade intensity = BlackRock share within each category (0–100%)"
