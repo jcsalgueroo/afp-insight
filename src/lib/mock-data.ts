@@ -1902,3 +1902,182 @@ export function getDroppedProducts(
   }
   return [...map.values()].sort((a, b) => Math.abs(b.aum) - Math.abs(a.aum));
 }
+
+// ============================================================================
+// Performance Analytics helpers
+// ============================================================================
+
+const PERF_BASELINE_MONTH = "2025-12";
+
+function wavg(rows: MasterRow[], pick: (r: MasterRow) => number): number {
+  let num = 0;
+  let den = 0;
+  for (const r of rows) {
+    const w = r.AUM_USD;
+    if (!w) continue;
+    num += pick(r) * w;
+    den += w;
+  }
+  return den > 0 ? num / den : 0;
+}
+
+export interface CumPerfPoint {
+  month: string;
+  [series: string]: number | string;
+}
+
+export function getCumulativePerformanceSeries(
+  portfolioTypes: PortfolioType[],
+  asOf: string,
+): CumPerfPoint[] {
+  const ptSet = portfolioTypes.length ? new Set(portfolioTypes) : null;
+  const months = MONTHS.filter((m) => m >= PERF_BASELINE_MONTH && (!asOf || m <= asOf));
+  if (!months.length) return [];
+
+  const series: ("System" | AFP)[] = ["System", ...AFPS];
+  const values: Record<string, number> = {};
+  series.forEach((s) => (values[s] = 100));
+
+  const out: CumPerfPoint[] = [];
+  // Baseline row at PERF_BASELINE_MONTH = 100
+  const baseRow: CumPerfPoint = { month: months[0] };
+  series.forEach((s) => (baseRow[s] = 100));
+  out.push(baseRow);
+
+  for (let i = 1; i < months.length; i++) {
+    const m = months[i];
+    const monthRows = MASTER_DATA.filter(
+      (r) => r.Date === m && (!ptSet || ptSet.has(r.Portfolio_Type)),
+    );
+    const point: CumPerfPoint = { month: m };
+    for (const s of series) {
+      const rs = s === "System" ? monthRows : monthRows.filter((r) => r.AFP === s);
+      const wp = wavg(rs, (r) => r.Perf_Month); // already in percent units
+      values[s] = values[s] * (1 + wp / 100);
+      point[s] = values[s];
+    }
+    out.push(point);
+  }
+  return out;
+}
+
+export interface CategoryAfpBubble {
+  group: AFP | "System";
+  category: Category;
+  weight: number; // 0..1 of total portfolio
+  ytdPerf: number; // percent units
+  aum: number;
+}
+
+export function getCategoryAfpBubbles(
+  asOf: string,
+  assetClass: "Equity" | "Fixed Income",
+): CategoryAfpBubble[] {
+  if (!asOf) return [];
+  const monthRows = MASTER_DATA.filter((r) => r.Date === asOf);
+  const out: CategoryAfpBubble[] = [];
+
+  const buildFor = (group: AFP | "System", rows: MasterRow[]) => {
+    const totalAum = rows.reduce((a, b) => a + b.AUM_USD, 0);
+    if (!totalAum) return;
+    const acRows = rows.filter((r) => r.Asset_Class === assetClass);
+    const cats = Array.from(new Set(acRows.map((r) => r.Category)));
+    for (const c of cats) {
+      const cr = acRows.filter((r) => r.Category === c);
+      const aum = cr.reduce((a, b) => a + b.AUM_USD, 0);
+      if (aum <= 0) continue;
+      out.push({
+        group,
+        category: c,
+        weight: aum / totalAum,
+        ytdPerf: wavg(cr, (r) => r.Perf_YTD),
+        aum,
+      });
+    }
+  };
+
+  buildFor("System", monthRows);
+  for (const a of AFPS) buildFor(a, monthRows.filter((r) => r.AFP === a));
+  return out;
+}
+
+export interface AssetClassBubble {
+  group: AFP | "System";
+  weight: number;
+  ytdPerf: number;
+}
+
+export function getAssetClassWeightVsPerf(
+  asOf: string,
+  assetClass: "Equity" | "Fixed Income",
+): AssetClassBubble[] {
+  if (!asOf) return [];
+  const monthRows = MASTER_DATA.filter((r) => r.Date === asOf);
+  const out: AssetClassBubble[] = [];
+  const buildFor = (group: AFP | "System", rows: MasterRow[]) => {
+    const totalAum = rows.reduce((a, b) => a + b.AUM_USD, 0);
+    if (!totalAum) return;
+    const acRows = rows.filter((r) => r.Asset_Class === assetClass);
+    const acAum = acRows.reduce((a, b) => a + b.AUM_USD, 0);
+    out.push({
+      group,
+      weight: acAum / totalAum,
+      ytdPerf: wavg(acRows, (r) => r.Perf_YTD),
+    });
+  };
+  buildFor("System", monthRows);
+  for (const a of AFPS) buildFor(a, monthRows.filter((r) => r.AFP === a));
+  return out;
+}
+
+export interface CategoryDispersionPoint {
+  group: AFP | "System";
+  weight: number;
+  ytdPerf: number;
+}
+
+export function getCategoryDispersion(
+  asOf: string,
+  assetClass: "Equity" | "Fixed Income",
+  category: Category,
+): { points: CategoryDispersionPoint[]; systemWeight: number; systemYtd: number } {
+  if (!asOf || !category) return { points: [], systemWeight: 0, systemYtd: 0 };
+  const monthRows = MASTER_DATA.filter(
+    (r) => r.Date === asOf && r.Asset_Class === assetClass,
+  );
+  const points: CategoryDispersionPoint[] = [];
+
+  const compute = (rows: MasterRow[]): { weight: number; ytdPerf: number } => {
+    const totalAum = rows.reduce((a, b) => a + b.AUM_USD, 0);
+    const cr = rows.filter((r) => r.Category === category);
+    const cAum = cr.reduce((a, b) => a + b.AUM_USD, 0);
+    return {
+      weight: totalAum ? cAum / totalAum : 0,
+      ytdPerf: wavg(cr, (r) => r.Perf_YTD),
+    };
+  };
+
+  // System uses ALL asset-class rows for total denominator? Use whole portfolio:
+  const systemAll = MASTER_DATA.filter((r) => r.Date === asOf);
+  const sysTotalAum = systemAll.reduce((a, b) => a + b.AUM_USD, 0);
+  const sysCatRows = monthRows.filter((r) => r.Category === category);
+  const sysCatAum = sysCatRows.reduce((a, b) => a + b.AUM_USD, 0);
+  const systemWeight = sysTotalAum ? sysCatAum / sysTotalAum : 0;
+  const systemYtd = wavg(sysCatRows, (r) => r.Perf_YTD);
+  points.push({ group: "System", weight: systemWeight, ytdPerf: systemYtd });
+
+  for (const a of AFPS) {
+    const afpAll = systemAll.filter((r) => r.AFP === a);
+    const totalAum = afpAll.reduce((s, b) => s + b.AUM_USD, 0);
+    const cr = afpAll.filter((r) => r.Asset_Class === assetClass && r.Category === category);
+    const cAum = cr.reduce((s, b) => s + b.AUM_USD, 0);
+    if (cAum <= 0) continue;
+    points.push({
+      group: a,
+      weight: totalAum ? cAum / totalAum : 0,
+      ytdPerf: wavg(cr, (r) => r.Perf_YTD),
+    });
+  }
+
+  return { points, systemWeight, systemYtd };
+}
