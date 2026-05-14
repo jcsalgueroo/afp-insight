@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as UcitsRouteImport } from './routes/ucits'
 import { Route as SecuritiesRouteImport } from './routes/securities'
 import { Route as RevenueRouteImport } from './routes/revenue'
+import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as PenetrationRouteImport } from './routes/penetration'
 import { Route as NewProductsRouteImport } from './routes/new-products'
 import { Route as FlowsRouteImport } from './routes/flows'
@@ -31,6 +32,11 @@ const SecuritiesRoute = SecuritiesRouteImport.update({
 const RevenueRoute = RevenueRouteImport.update({
   id: '/revenue',
   path: '/revenue',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PerformanceRoute = PerformanceRouteImport.update({
+  id: '/performance',
+  path: '/performance',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PenetrationRoute = PenetrationRouteImport.update({
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/flows': typeof FlowsRoute
   '/new-products': typeof NewProductsRoute
   '/penetration': typeof PenetrationRoute
+  '/performance': typeof PerformanceRoute
   '/revenue': typeof RevenueRoute
   '/securities': typeof SecuritiesRoute
   '/ucits': typeof UcitsRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/flows': typeof FlowsRoute
   '/new-products': typeof NewProductsRoute
   '/penetration': typeof PenetrationRoute
+  '/performance': typeof PerformanceRoute
   '/revenue': typeof RevenueRoute
   '/securities': typeof SecuritiesRoute
   '/ucits': typeof UcitsRoute
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/flows': typeof FlowsRoute
   '/new-products': typeof NewProductsRoute
   '/penetration': typeof PenetrationRoute
+  '/performance': typeof PerformanceRoute
   '/revenue': typeof RevenueRoute
   '/securities': typeof SecuritiesRoute
   '/ucits': typeof UcitsRoute
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/flows'
     | '/new-products'
     | '/penetration'
+    | '/performance'
     | '/revenue'
     | '/securities'
     | '/ucits'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/flows'
     | '/new-products'
     | '/penetration'
+    | '/performance'
     | '/revenue'
     | '/securities'
     | '/ucits'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/flows'
     | '/new-products'
     | '/penetration'
+    | '/performance'
     | '/revenue'
     | '/securities'
     | '/ucits'
@@ -129,6 +141,7 @@ export interface RootRouteChildren {
   FlowsRoute: typeof FlowsRoute
   NewProductsRoute: typeof NewProductsRoute
   PenetrationRoute: typeof PenetrationRoute
+  PerformanceRoute: typeof PerformanceRoute
   RevenueRoute: typeof RevenueRoute
   SecuritiesRoute: typeof SecuritiesRoute
   UcitsRoute: typeof UcitsRoute
@@ -155,6 +168,13 @@ declare module '@tanstack/react-router' {
       path: '/revenue'
       fullPath: '/revenue'
       preLoaderRoute: typeof RevenueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/performance': {
+      id: '/performance'
+      path: '/performance'
+      fullPath: '/performance'
+      preLoaderRoute: typeof PerformanceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/penetration': {
@@ -201,6 +221,7 @@ const rootRouteChildren: RootRouteChildren = {
   FlowsRoute: FlowsRoute,
   NewProductsRoute: NewProductsRoute,
   PenetrationRoute: PenetrationRoute,
+  PerformanceRoute: PerformanceRoute,
   RevenueRoute: RevenueRoute,
   SecuritiesRoute: SecuritiesRoute,
   UcitsRoute: UcitsRoute,
@@ -208,3 +229,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
