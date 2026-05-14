@@ -438,14 +438,14 @@ export function getTopManagersPie(f: Filters, bucket: Bucket) {
 
 export function getYtdByManagerSeries(
   f: Filters,
-  bucket: Bucket,
+  bucket: Bucket | "All",
   metric: "NNB" | "NNBF",
 ) {
   const months = monthsYTD(f.date);
   // Determine top brands across the whole YTD window
   const totals = new Map<string, number>();
   for (const m of months) {
-    for (const r of rowsAt(m, f.afps).filter((r) => bucketOf(r) === bucket)) {
+    for (const r of rowsAt(m, f.afps).filter((r) => bucket === "All" || bucketOf(r) === bucket)) {
       const v = metric === "NNB" ? r.NNB_YTD_USD : r.NNBF_YTD_USD;
       const b = brandOf(r);
       totals.set(b, (totals.get(b) ?? 0) + v);
@@ -455,7 +455,7 @@ export function getYtdByManagerSeries(
   const data = months.map((m) => {
     const row: Record<string, number | string> = { m };
     const monthly: Record<string, number> = Object.fromEntries(brands.map((b) => [b, 0]));
-    for (const r of rowsAt(m, f.afps).filter((r) => bucketOf(r) === bucket)) {
+    for (const r of rowsAt(m, f.afps).filter((r) => bucket === "All" || bucketOf(r) === bucket)) {
       const b = brandOf(r);
       if (!brands.includes(b)) continue;
       const v = metric === "NNB" ? r.NNB_YTD_USD : r.NNBF_YTD_USD;
