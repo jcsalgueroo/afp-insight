@@ -246,16 +246,7 @@ export function UcitsSnapshot() {
       >
         <div className="h-[340px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={catShare.map((r) => ({
-                category: r.category,
-                US: r.total ? (r.US * r.total) / 100 / r.total * 100 : 0,
-                UCITS: r.UCITS,
-                Other: r.Other,
-                _US: r.US,
-              }))}
-              margin={{ top: 8, right: 16, left: 0, bottom: 30 }}
-            >
+            <BarChart data={catShare} margin={{ top: 8, right: 16, left: 0, bottom: 30 }}>
               <CartesianGrid stroke="#EEE" vertical={false} />
               <XAxis
                 dataKey="category"
