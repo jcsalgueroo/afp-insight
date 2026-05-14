@@ -117,14 +117,12 @@ export function getKPIs(f: Filters) {
   // We sum the displayed iShares + BlackRock series across all three buckets
   // at the selected month so the KPI matches what the chart actually shows.
   const blkYtdAt = (month: string, metric: "NNB" | "NNBF"): number => {
+    const s = getYtdByManagerSeries({ date: month, afps: f.afps, blkOnly: false }, "All", metric);
+    const row = s.data.find((d) => d.m === month);
+    if (!row) return 0;
     let total = 0;
-    for (const b of BUCKETS) {
-      const s = getYtdByManagerSeries({ date: month, afps: f.afps, blkOnly: false }, b, metric);
-      const row = s.data.find((d) => d.m === month);
-      if (!row) continue;
-      for (const brand of ["iShares", "BlackRock"] as const) {
-        if (s.brands.includes(brand)) total += (row[brand] as number) ?? 0;
-      }
+    for (const brand of ["iShares", "BlackRock"] as const) {
+      if (s.brands.includes(brand)) total += (row[brand] as number) ?? 0;
     }
     return total;
   };
@@ -438,14 +436,14 @@ export function getTopManagersPie(f: Filters, bucket: Bucket) {
 
 export function getYtdByManagerSeries(
   f: Filters,
-  bucket: Bucket,
+  bucket: Bucket | "All",
   metric: "NNB" | "NNBF",
 ) {
   const months = monthsYTD(f.date);
   // Determine top brands across the whole YTD window
   const totals = new Map<string, number>();
   for (const m of months) {
-    for (const r of rowsAt(m, f.afps).filter((r) => bucketOf(r) === bucket)) {
+    for (const r of rowsAt(m, f.afps).filter((r) => bucket === "All" || bucketOf(r) === bucket)) {
       const v = metric === "NNB" ? r.NNB_YTD_USD : r.NNBF_YTD_USD;
       const b = brandOf(r);
       totals.set(b, (totals.get(b) ?? 0) + v);
@@ -455,7 +453,7 @@ export function getYtdByManagerSeries(
   const data = months.map((m) => {
     const row: Record<string, number | string> = { m };
     const monthly: Record<string, number> = Object.fromEntries(brands.map((b) => [b, 0]));
-    for (const r of rowsAt(m, f.afps).filter((r) => bucketOf(r) === bucket)) {
+    for (const r of rowsAt(m, f.afps).filter((r) => bucket === "All" || bucketOf(r) === bucket)) {
       const b = brandOf(r);
       if (!brands.includes(b)) continue;
       const v = metric === "NNB" ? r.NNB_YTD_USD : r.NNBF_YTD_USD;

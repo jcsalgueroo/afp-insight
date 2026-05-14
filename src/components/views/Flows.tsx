@@ -49,6 +49,13 @@ const BUCKET_TOGGLE = [
   { value: "Money Market" as Bucket, label: "MM" },
 ] as const;
 
+const ALL_BUCKET_TOGGLE = [
+  { value: "All" as const, label: "All" },
+  { value: "ETF" as const, label: "ETF" },
+  { value: "Mutual Fund" as const, label: "MF" },
+  { value: "Money Market" as const, label: "MM" },
+] as const;
+
 const PERF_BUCKET_TOGGLE = [
   { value: "ETF" as const, label: "ETF" },
   { value: "Mutual Fund" as const, label: "MF" },
@@ -277,9 +284,9 @@ export function Flows() {
   const monthly = useMemo(() => getMonthlyBucketFlows(monthlyAfps), [monthlyAfps]);
 
   // 7) YTD NNB / NNBF by manager
-  const [nnbBucket, setNnbBucket] = useState<Bucket>("ETF");
+  const [nnbBucket, setNnbBucket] = useState<Bucket | "All">("All");
   const [nnbAfps, setNnbAfps] = useState<AFP[]>([]);
-  const [nnbfBucket, setNnbfBucket] = useState<Bucket>("ETF");
+  const [nnbfBucket, setNnbfBucket] = useState<Bucket | "All">("All");
   const [nnbfAfps, setNnbfAfps] = useState<AFP[]>([]);
   const nnbSeries = useMemo(
     () => getYtdByManagerSeries({ date, afps: nnbAfps, blkOnly: false }, nnbBucket, "NNB"),
@@ -599,7 +606,7 @@ export function Flows() {
           subtitle="YTD NNB per month, stacked by manager (signed)"
           right={
             <>
-              <SegmentedToggle options={BUCKET_TOGGLE} value={nnbBucket} onChange={setNnbBucket} />
+              <SegmentedToggle options={ALL_BUCKET_TOGGLE} value={nnbBucket} onChange={setNnbBucket} />
               <AfpFilterPopover value={nnbAfps} onChange={setNnbAfps} />
             </>
           }
@@ -636,7 +643,7 @@ export function Flows() {
           subtitle="YTD NNBF per month, stacked by manager (signed)"
           right={
             <>
-              <SegmentedToggle options={BUCKET_TOGGLE} value={nnbfBucket} onChange={setNnbfBucket} />
+              <SegmentedToggle options={ALL_BUCKET_TOGGLE} value={nnbfBucket} onChange={setNnbfBucket} />
               <AfpFilterPopover value={nnbfAfps} onChange={setNnbfAfps} />
             </>
           }
