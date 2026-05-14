@@ -41,6 +41,7 @@ export interface MasterRow {
   Perf_Month: number;
   Perf_YTD: number;
   Asset_Class: string;
+  Domicile: string;
 }
 
 export interface DisplacementRow {
@@ -1608,4 +1609,149 @@ export function getBelowWeightSecurities(opts: {
     });
   });
   return out;
+}
+
+// ============================================================================
+// UCITS Snapshot selectors
+// ============================================================================
+
+export type DomicileGroup = "US" | "UCITS" | "Other";
+export function domicileGroup(r: MasterRow): DomicileGroup {
+  const d = (r.Domicile || "").trim().toUpperCase();
+  if (d === "US") return "US";
+  if (d === "IE" || d === "LU") return "UCITS";
+  return "Other";
+}
+
+export const DOMICILE_COLORS: Record<DomicileGroup, string> = {
+  US: "#00B140",
+  UCITS: "#1F4E8C",
+  Other: "#999999",
+};
+
+/** Month-by-month AUM_Org composition (US vs UCITS vs Other) across selected AFPs. */
+export function getDomicileCompositionSeries(afps: AFP[]) {
+  return MONTHS.map((m) => {
+    const row: Record<string, number | string> = { m, US: 0, UCITS: 0, Other: 0 };
+    for (const r of rowsAt(m, afps)) {
+      const g = domicileGroup(r);
+      row[g] = (row[g] as number) + r.AUM_USD;
+    }
+    return row;
+  });
+}
+
+/** US vs UCITS NNB by AFP, diverging on sign. */
+export function getDomicileNnbByAfp(period: "Month" | "YTD", date: string) {
+  const field: keyof MasterRow = period === "YTD" ? "NNB_YTD_USD" : "NNB_Month_USD";
+  return AFPS.map((afp) => {
+    const rows = MASTER_DATA.filter((r) => r.Date === date && r.AFP === afp);
+    let us = 0, ucits = 0, other = 0;
+    for (const r of rows) {
+      const v = r[field] as number;
+      const g = domicileGroup(r);
+      if (g === "US") us += v;
+      else if (g === "UCITS") ucits += v;
+      else other += v;
+    }
+    return { AFP: afp, US: us, UCITS: ucits, Other: other, total: us + ucits + other };
+  }).filter((r) => r.US !== 0 || r.UCITS !== 0 || r.Other !== 0);
+}
+
+/** Top 5 + Others manager market share within UCITS ETFs (IE/LU), per AFP, % adding to 100. */
+export function getUcitsEtfManagerShareByAfp(date: string) {
+  const rows = MASTER_DATA.filter(
+    (r) => r.Date === date && bucketOf(r) === "ETF" && domicileGroup(r) === "UCITS",
+  );
+  // Determine top 5 managers globally within UCITS ETFs by AUM
+  const totals = new Map<Manager, number>();
+  for (const r of rows) totals.set(r.Manager, (totals.get(r.Manager) ?? 0) + r.AUM_USD);
+  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, 5).map(([k]) => k);
+  const data = AFPS.map((afp) => {
+    const sub = rows.filter((r) => r.AFP === afp);
+    const total = sumBy(sub, (r) => r.AUM_USD) || 0;
+    const row: Record<string, number | string> = { AFP: afp };
+    let othersAbs = 0;
+    const m = new Map<Manager, number>();
+    for (const r of sub) m.set(r.Manager, (m.get(r.Manager) ?? 0) + r.AUM_USD);
+    for (const [k, v] of m) {
+      if (top.includes(k)) row[k] = total ? (v / total) * 100 : 0;
+      else othersAbs += v;
+    }
+    for (const k of top) if (!(k in row)) row[k] = 0;
+    row["Others"] = total ? (othersAbs / total) * 100 : 0;
+    return row;
+  }).filter((r) => {
+    return [...top, "Others"].some((k) => (r[k] as number) > 0);
+  });
+  return { data, managers: [...top, "Others"] as string[] };
+}
+
+/** US vs UCITS share by Category (100% stacked), filtered by Asset Class. */
+export function getDomicileShareByCategory(
+  date: string,
+  assetClass: AssetClassFilter,
+) {
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      r.Date === date &&
+      (assetClass === "All" || r.Asset_Class === assetClass),
+  );
+  const cats = CATEGORIES.filter(
+    (c) => assetClass === "All" || categoryAssetClass(c) === assetClass,
+  );
+  return cats
+    .map((cat) => {
+      const sub = rows.filter((r) => r.Category === cat);
+      const total = sumBy(sub, (r) => r.AUM_USD) || 0;
+      let us = 0, ucits = 0, other = 0;
+      for (const r of sub) {
+        const g = domicileGroup(r);
+        if (g === "US") us += r.AUM_USD;
+        else if (g === "UCITS") ucits += r.AUM_USD;
+        else other += r.AUM_USD;
+      }
+      return {
+        category: cat,
+        US: total ? (us / total) * 100 : 0,
+        UCITS: total ? (ucits / total) * 100 : 0,
+        Other: total ? (other / total) * 100 : 0,
+        total,
+      };
+    })
+    .filter((r) => r.total > 0);
+}
+
+/** UCITS NNB by Category (Month or YTD), with optional AFP and Category filters. */
+export function getUcitsNnbByCategory(
+  period: "Month" | "YTD",
+  date: string,
+  afps: AFP[],
+  categories: Category[],
+) {
+  const field: keyof MasterRow = period === "YTD" ? "NNB_YTD_USD" : "NNB_Month_USD";
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      r.Date === date &&
+      domicileGroup(r) === "UCITS" &&
+      (afps.length === 0 || afps.includes(r.AFP)) &&
+      (categories.length === 0 || categories.includes(r.Category)),
+  );
+  const m = new Map<Category, number>();
+  for (const r of rows) m.set(r.Category, (m.get(r.Category) ?? 0) + (r[field] as number));
+  return [...m.entries()]
+    .map(([Category, NNB]) => ({ Category, NNB }))
+    .filter((d) => d.NNB !== 0)
+    .sort((a, b) => b.NNB - a.NNB);
+}
+
+/** Aggregated AUM_Org by AFP for a given ISIN, across all months in dataset (current month). */
+export function getSecurityAumByAfp(isin: string, date: string) {
+  const rows = MASTER_DATA.filter((r) => r.ISIN === isin && r.Date === date);
+  const m = new Map<AFP, number>();
+  for (const r of rows) m.set(r.AFP, (m.get(r.AFP) ?? 0) + r.AUM_USD);
+  return [...m.entries()]
+    .map(([AFP, AUM]) => ({ AFP, AUM }))
+    .sort((a, b) => b.AUM - a.AUM);
 }

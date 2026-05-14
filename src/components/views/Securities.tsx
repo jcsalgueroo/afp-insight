@@ -13,11 +13,22 @@ import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search } from "lucide-re
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useDashboard } from "@/lib/dashboard-store";
-import { applyFilters, formatBps, formatUSD, MASTER_DATA, type MasterRow } from "@/lib/mock-data";
+import {
+  applyFilters,
+  formatBps,
+  formatUSD,
+  getSecurityAumByAfp,
+  MASTER_DATA,
+  type MasterRow,
+} from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
 export function Securities() {
   const { date, blkOnly } = useDashboard();
+  // closure for hover cell
+  // (date used in AumHoverCell below)
+  ;
   const data = useMemo(
     () => applyFilters(MASTER_DATA, { date, afps: [], blkOnly }),
     [date, blkOnly],
@@ -31,6 +42,7 @@ export function Securities() {
     { accessorKey: "AFP", header: "AFP" },
     { accessorKey: "Portfolio_Type", header: "Portfolio" },
     { accessorKey: "ISIN", header: "ISIN", cell: (c) => <span className="tabular-nums text-xs">{c.getValue<string>()}</span> },
+    { accessorKey: "Ticker", header: "Ticker", cell: (c) => <span className="tabular-nums text-xs">{c.getValue<string>() || "—"}</span> },
     { accessorKey: "Name", header: "Name" },
     {
       accessorKey: "Manager",
@@ -54,7 +66,7 @@ export function Securities() {
     {
       accessorKey: "AUM_USD",
       header: () => <div className="text-right">AUM</div>,
-      cell: (c) => <div className="text-right tabular-nums">{formatUSD(c.getValue<number>())}</div>,
+      cell: (c) => <AumHoverCell row={c.row.original} value={c.getValue<number>()} />,
     },
     {
       accessorKey: "NNB_USD",
@@ -184,5 +196,45 @@ export function Securities() {
         </div>
       </div>
     </div>
+  );
+}
+
+function AumHoverCell({ row, value }: { row: MasterRow; value: number }) {
+  const breakdown = useMemo(
+    () => getSecurityAumByAfp(row.ISIN, row.Date),
+    [row.ISIN, row.Date],
+  );
+  const total = breakdown.reduce((s, b) => s + b.AUM, 0) || 1;
+  return (
+    <HoverCard openDelay={120} closeDelay={60}>
+      <HoverCardTrigger asChild>
+        <div className="text-right tabular-nums cursor-default">{formatUSD(value)}</div>
+      </HoverCardTrigger>
+      <HoverCardContent align="end" className="w-64 p-3 text-xs">
+        <div className="font-semibold text-sm mb-0.5 truncate">{row.Ticker || row.Name}</div>
+        <div className="text-muted-foreground mb-2 truncate text-[11px]">
+          {row.ISIN} · {formatUSD(total)} total
+        </div>
+        <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+          AUM Org by AFP
+        </div>
+        <div className="space-y-0.5 max-h-56 overflow-auto">
+          {breakdown.map((b) => (
+            <div key={b.AFP} className="flex items-center justify-between gap-2">
+              <span className="truncate">{b.AFP}</span>
+              <span className="font-medium tabular-nums">
+                {formatUSD(b.AUM)}{" "}
+                <span className="text-muted-foreground">
+                  ({((b.AUM / total) * 100).toFixed(0)}%)
+                </span>
+              </span>
+            </div>
+          ))}
+          {breakdown.length === 0 && (
+            <div className="text-muted-foreground">No holdings.</div>
+          )}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
   );
 }

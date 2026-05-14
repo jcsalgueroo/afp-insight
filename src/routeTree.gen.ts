@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UcitsRouteImport } from './routes/ucits'
 import { Route as SecuritiesRouteImport } from './routes/securities'
 import { Route as RevenueRouteImport } from './routes/revenue'
 import { Route as PenetrationRouteImport } from './routes/penetration'
@@ -16,6 +17,11 @@ import { Route as FlowsRouteImport } from './routes/flows'
 import { Route as AfpRouteImport } from './routes/afp'
 import { Route as IndexRouteImport } from './routes/index'
 
+const UcitsRoute = UcitsRouteImport.update({
+  id: '/ucits',
+  path: '/ucits',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SecuritiesRoute = SecuritiesRouteImport.update({
   id: '/securities',
   path: '/securities',
@@ -54,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/penetration': typeof PenetrationRoute
   '/revenue': typeof RevenueRoute
   '/securities': typeof SecuritiesRoute
+  '/ucits': typeof UcitsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByTo {
   '/penetration': typeof PenetrationRoute
   '/revenue': typeof RevenueRoute
   '/securities': typeof SecuritiesRoute
+  '/ucits': typeof UcitsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,6 +79,7 @@ export interface FileRoutesById {
   '/penetration': typeof PenetrationRoute
   '/revenue': typeof RevenueRoute
   '/securities': typeof SecuritiesRoute
+  '/ucits': typeof UcitsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -81,8 +90,16 @@ export interface FileRouteTypes {
     | '/penetration'
     | '/revenue'
     | '/securities'
+    | '/ucits'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/afp' | '/flows' | '/penetration' | '/revenue' | '/securities'
+  to:
+    | '/'
+    | '/afp'
+    | '/flows'
+    | '/penetration'
+    | '/revenue'
+    | '/securities'
+    | '/ucits'
   id:
     | '__root__'
     | '/'
@@ -91,6 +108,7 @@ export interface FileRouteTypes {
     | '/penetration'
     | '/revenue'
     | '/securities'
+    | '/ucits'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -100,10 +118,18 @@ export interface RootRouteChildren {
   PenetrationRoute: typeof PenetrationRoute
   RevenueRoute: typeof RevenueRoute
   SecuritiesRoute: typeof SecuritiesRoute
+  UcitsRoute: typeof UcitsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/ucits': {
+      id: '/ucits'
+      path: '/ucits'
+      fullPath: '/ucits'
+      preLoaderRoute: typeof UcitsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/securities': {
       id: '/securities'
       path: '/securities'
@@ -156,17 +182,8 @@ const rootRouteChildren: RootRouteChildren = {
   PenetrationRoute: PenetrationRoute,
   RevenueRoute: RevenueRoute,
   SecuritiesRoute: SecuritiesRoute,
+  UcitsRoute: UcitsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
