@@ -117,14 +117,12 @@ export function getKPIs(f: Filters) {
   // We sum the displayed iShares + BlackRock series across all three buckets
   // at the selected month so the KPI matches what the chart actually shows.
   const blkYtdAt = (month: string, metric: "NNB" | "NNBF"): number => {
+    const s = getYtdByManagerSeries({ date: month, afps: f.afps, blkOnly: false }, "All", metric);
+    const row = s.data.find((d) => d.m === month);
+    if (!row) return 0;
     let total = 0;
-    for (const b of BUCKETS) {
-      const s = getYtdByManagerSeries({ date: month, afps: f.afps, blkOnly: false }, b, metric);
-      const row = s.data.find((d) => d.m === month);
-      if (!row) continue;
-      for (const brand of ["iShares", "BlackRock"] as const) {
-        if (s.brands.includes(brand)) total += (row[brand] as number) ?? 0;
-      }
+    for (const brand of ["iShares", "BlackRock"] as const) {
+      if (s.brands.includes(brand)) total += (row[brand] as number) ?? 0;
     }
     return total;
   };
