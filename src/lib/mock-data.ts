@@ -1209,6 +1209,59 @@ export function getTopBottomSecurities(
   return [...top, ...bottom].sort((a, b) => b.nnb - a.nnb);
 }
 
+/** Top 5 + Bottom 5 securities by NNBF (snapshot at selected date). */
+export function getTopBottomSecuritiesNnbf(
+  afps: AFP[],
+  managers: Manager[],
+  bucket: Bucket,
+  period: Period,
+  date: string,
+) {
+  const field: keyof MasterRow = period === "YTD" ? "NNBF_YTD_USD" : "NNBF_Month_USD";
+  const rows = MASTER_DATA.filter(
+    (r) =>
+      r.Date === date &&
+      (afps.length === 0 || afps.includes(r.AFP)) &&
+      bucketOf(r) === bucket &&
+      (managers.length === 0 || managers.includes(r.Manager)),
+  );
+  const map = new Map<
+    string,
+    {
+      isin: string;
+      name: string;
+      manager: Manager;
+      nnb: number;
+      byAfp: Map<AFP, number>;
+    }
+  >();
+  for (const r of rows) {
+    const v = r[field] as number;
+    const cur =
+      map.get(r.ISIN) ??
+      { isin: r.ISIN, name: r.Name, manager: r.Manager, nnb: 0, byAfp: new Map<AFP, number>() };
+    cur.nnb += v;
+    cur.byAfp.set(r.AFP, (cur.byAfp.get(r.AFP) ?? 0) + v);
+    map.set(r.ISIN, cur);
+  }
+  const all = [...map.values()]
+    .filter((x) => x.nnb !== 0)
+    .sort((a, b) => b.nnb - a.nnb);
+  const shape = (x: typeof all[number], isTop: boolean) => ({
+    label: bucket === "ETF" ? tickerOf(x.isin) : x.name,
+    nnb: x.nnb,
+    manager: x.manager,
+    isin: x.isin,
+    isTop,
+    afpBreakdown: [...x.byAfp.entries()]
+      .map(([AFP, NNB]) => ({ AFP, NNB }))
+      .sort((a, b) => Math.abs(b.NNB) - Math.abs(a.NNB)),
+  });
+  const top = all.slice(0, 5).map((x) => shape(x, true));
+  const bottom = all.slice(-5).reverse().map((x) => shape(x, false));
+  return [...top, ...bottom].sort((a, b) => b.nnb - a.nnb);
+}
+
 /** Monthly NNB stacked by bucket (ETF / Mutual Fund / Money Market). */
 export function getMonthlyBucketFlows(afps: AFP[]) {
   return MONTHS.map((m) => {
