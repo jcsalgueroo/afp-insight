@@ -34,6 +34,7 @@ import {
   formatUSD,
   getAumOrgByBucketSeries,
   getBrandKpis,
+  getBlkFlowsByAfp,
   getCategoryWeightBars,
   getCategoryCompositionSeries,
   getKPIs,
@@ -72,6 +73,11 @@ const ASSET_CLASS_TOGGLE = [
 const METRIC_TOGGLE = [
   { value: "AUM_USD" as const, label: "AUM Org" },
   { value: "NNB_USD" as const, label: "Monthly NNB" },
+] as const;
+
+const PERIOD_TOGGLE = [
+  { value: "Month" as const, label: "Month" },
+  { value: "YTD" as const, label: "YTD" },
 ] as const;
 
 function shortMonth(m: string) {
