@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { ChevronRight } from "lucide-react";
 
 const BUCKET_TOGGLE = [
   { value: "All" as const, label: "All" },
@@ -31,6 +32,14 @@ const GROUP_TOGGLE = [
   { value: "cat" as const, label: "Category → AFP" },
   { value: "afp" as const, label: "AFP → Category" },
 ] as const;
+
+const ASSET_CLASS_TOGGLE = [
+  { value: "All" as const, label: "All" },
+  { value: "Equity" as const, label: "Equity" },
+  { value: "Fixed Income" as const, label: "FI" },
+] as const;
+
+type AssetClassFilter = "All" | "Equity" | "Fixed Income";
 
 function CardShell({
   title,
@@ -74,10 +83,12 @@ export function ProductPenetration() {
   const [bucket, setBucket] = useState<Bucket | "All">("All");
   const [ptypes, setPtypes] = useState<PortfolioType[]>([]);
   const [groupBy, setGroupBy] = useState<"cat" | "afp">("cat");
+  const [heatAC, setHeatAC] = useState<AssetClassFilter>("All");
+  const [belowAC, setBelowAC] = useState<AssetClassFilter>("All");
 
   const heat = useMemo(
-    () => getPenetrationHeatmap({ bucket, portfolioTypes: ptypes, date }),
-    [bucket, ptypes, date],
+    () => getPenetrationHeatmap({ bucket, portfolioTypes: ptypes, date, assetClass: heatAC }),
+    [bucket, ptypes, date, heatAC],
   );
   const below = useMemo(
     () =>
@@ -86,8 +97,9 @@ export function ProductPenetration() {
         portfolioTypes: ptypes,
         date,
         threshold: 0.65,
+        assetClass: belowAC,
       }),
-    [ptypes, date],
+    [ptypes, date, belowAC],
   );
 
   return (
@@ -105,6 +117,7 @@ export function ProductPenetration() {
         right={
           <>
             <SegmentedToggle value={bucket} onChange={setBucket} options={BUCKET_TOGGLE} />
+            <SegmentedToggle value={heatAC} onChange={setHeatAC} options={ASSET_CLASS_TOGGLE} />
             <MultiSelectPopover
               label="Portfolio"
               options={PORTFOLIO_TYPES}
@@ -146,7 +159,10 @@ export function ProductPenetration() {
         title="Punching Below our Weight"
         subtitle={`ETFs in cells where BlackRock share is below 65% (${below.length} securities)`}
         right={
-          <SegmentedToggle value={groupBy} onChange={setGroupBy} options={GROUP_TOGGLE} />
+          <>
+            <SegmentedToggle value={belowAC} onChange={setBelowAC} options={ASSET_CLASS_TOGGLE} />
+            <SegmentedToggle value={groupBy} onChange={setGroupBy} options={GROUP_TOGGLE} />
+          </>
         }
       >
         {below.length === 0 ? (
@@ -322,39 +338,53 @@ function GroupBlock({
   inners: { key: string; rows: ReturnType<typeof getBelowWeightSecurities> }[];
   groupBy: "cat" | "afp";
 }) {
+  const [open, setOpen] = useState(false);
   const totalAum = inners.reduce(
     (s, i) => s + i.rows.reduce((ss, r) => ss + r.AUM_USD, 0),
     0,
   );
   const outerLabel = groupBy === "cat" ? "Category" : "AFP";
   const innerLabel = groupBy === "cat" ? "AFP" : "Category";
+  const totalRows = inners.reduce((s, i) => s + i.rows.length, 0);
   return (
     <>
-      <TableRow className="bg-foreground/[0.06] hover:bg-foreground/[0.06]">
+      <TableRow
+        className="bg-foreground/[0.06] hover:bg-foreground/[0.10] cursor-pointer"
+        onClick={() => setOpen((o) => !o)}
+      >
         <TableCell colSpan={5} className="py-2">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-2">
-            {outerLabel}
-          </span>
-          <span className="font-semibold text-sm">{outer}</span>
-          <span className="text-xs text-muted-foreground ml-3">
-            {formatUSD(totalAum)} across {inners.length} {innerLabel.toLowerCase()}(s)
-          </span>
+          <div className="flex items-center gap-2">
+            <ChevronRight
+              className={cn(
+                "h-3.5 w-3.5 text-muted-foreground transition-transform",
+                open && "rotate-90",
+              )}
+            />
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              {outerLabel}
+            </span>
+            <span className="font-semibold text-sm">{outer}</span>
+            <span className="text-xs text-muted-foreground">
+              {formatUSD(totalAum)} · {inners.length} {innerLabel.toLowerCase()}(s) · {totalRows} securities
+            </span>
+          </div>
         </TableCell>
       </TableRow>
-      {inners.map((inner) => {
-        const cellShare = inner.rows[0]?.blkShare ?? 0;
-        const cellAum = inner.rows[0]?.cellAUM ?? 0;
-        return (
-          <InnerBlock
-            key={inner.key}
-            innerKey={inner.key}
-            innerLabel={innerLabel}
-            cellShare={cellShare}
-            cellAum={cellAum}
-            rows={inner.rows}
-          />
-        );
-      })}
+      {open &&
+        inners.map((inner) => {
+          const cellShare = inner.rows[0]?.blkShare ?? 0;
+          const cellAum = inner.rows[0]?.cellAUM ?? 0;
+          return (
+            <InnerBlock
+              key={inner.key}
+              innerKey={inner.key}
+              innerLabel={innerLabel}
+              cellShare={cellShare}
+              cellAum={cellAum}
+              rows={inner.rows}
+            />
+          );
+        })}
     </>
   );
 }
@@ -372,20 +402,32 @@ function InnerBlock({
   cellAum: number;
   rows: ReturnType<typeof getBelowWeightSecurities>;
 }) {
+  const [open, setOpen] = useState(false);
   return (
     <>
-      <TableRow className="bg-muted/30 hover:bg-muted/30">
+      <TableRow
+        className="bg-muted/30 hover:bg-muted/50 cursor-pointer"
+        onClick={() => setOpen((o) => !o)}
+      >
         <TableCell colSpan={5} className="py-1.5 pl-6">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-2">
-            {innerLabel}
-          </span>
-          <span className="font-medium text-xs">{innerKey}</span>
-          <span className="text-[11px] text-muted-foreground ml-3">
-            BLK {(cellShare * 100).toFixed(1)}% · cell {formatUSD(cellAum)}
-          </span>
+          <div className="flex items-center gap-2">
+            <ChevronRight
+              className={cn(
+                "h-3 w-3 text-muted-foreground transition-transform",
+                open && "rotate-90",
+              )}
+            />
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              {innerLabel}
+            </span>
+            <span className="font-medium text-xs">{innerKey}</span>
+            <span className="text-[11px] text-muted-foreground">
+              BLK {(cellShare * 100).toFixed(1)}% · cell {formatUSD(cellAum)} · {rows.length} securities
+            </span>
+          </div>
         </TableCell>
       </TableRow>
-      {rows.map((r) => (
+      {open && rows.map((r) => (
         <TableRow key={`${r.AFP}-${r.Category}-${r.ISIN}`}>
           <TableCell className="pl-10">
             <div className="text-xs font-medium">
