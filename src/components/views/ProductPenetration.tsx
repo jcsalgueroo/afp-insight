@@ -32,6 +32,14 @@ const GROUP_TOGGLE = [
   { value: "afp" as const, label: "AFP → Category" },
 ] as const;
 
+const ASSET_CLASS_TOGGLE = [
+  { value: "All" as const, label: "All" },
+  { value: "Equity" as const, label: "Equity" },
+  { value: "Fixed Income" as const, label: "FI" },
+] as const;
+
+type AssetClassFilter = "All" | "Equity" | "Fixed Income";
+
 function CardShell({
   title,
   subtitle,
@@ -74,10 +82,12 @@ export function ProductPenetration() {
   const [bucket, setBucket] = useState<Bucket | "All">("All");
   const [ptypes, setPtypes] = useState<PortfolioType[]>([]);
   const [groupBy, setGroupBy] = useState<"cat" | "afp">("cat");
+  const [heatAC, setHeatAC] = useState<AssetClassFilter>("All");
+  const [belowAC, setBelowAC] = useState<AssetClassFilter>("All");
 
   const heat = useMemo(
-    () => getPenetrationHeatmap({ bucket, portfolioTypes: ptypes, date }),
-    [bucket, ptypes, date],
+    () => getPenetrationHeatmap({ bucket, portfolioTypes: ptypes, date, assetClass: heatAC }),
+    [bucket, ptypes, date, heatAC],
   );
   const below = useMemo(
     () =>
@@ -86,8 +96,9 @@ export function ProductPenetration() {
         portfolioTypes: ptypes,
         date,
         threshold: 0.65,
+        assetClass: belowAC,
       }),
-    [ptypes, date],
+    [ptypes, date, belowAC],
   );
 
   return (
@@ -105,6 +116,7 @@ export function ProductPenetration() {
         right={
           <>
             <SegmentedToggle value={bucket} onChange={setBucket} options={BUCKET_TOGGLE} />
+            <SegmentedToggle value={heatAC} onChange={setHeatAC} options={ASSET_CLASS_TOGGLE} />
             <MultiSelectPopover
               label="Portfolio"
               options={PORTFOLIO_TYPES}
@@ -146,7 +158,10 @@ export function ProductPenetration() {
         title="Punching Below our Weight"
         subtitle={`ETFs in cells where BlackRock share is below 65% (${below.length} securities)`}
         right={
-          <SegmentedToggle value={groupBy} onChange={setGroupBy} options={GROUP_TOGGLE} />
+          <>
+            <SegmentedToggle value={belowAC} onChange={setBelowAC} options={ASSET_CLASS_TOGGLE} />
+            <SegmentedToggle value={groupBy} onChange={setGroupBy} options={GROUP_TOGGLE} />
+          </>
         }
       >
         {below.length === 0 ? (
