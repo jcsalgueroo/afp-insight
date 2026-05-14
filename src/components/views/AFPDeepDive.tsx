@@ -474,8 +474,13 @@ export function AFPDeepDive() {
                                     {r.Perf_Advantage_pct >= 0 ? "+" : ""}
                                     {r.Perf_Advantage_pct.toFixed(2)}%
                                   </td>
-                                  <td className="px-5 py-2.5 text-right tabular-nums text-positive font-medium">
-                                    -{r.Fee_Advantage_bps} bps
+                                  <td
+                                    className={cn(
+                                      "px-5 py-2.5 text-right tabular-nums font-medium",
+                                      r.Fee_Advantage_bps >= 0 ? "text-positive" : "text-negative",
+                                    )}
+                                  >
+                                    {Math.abs(r.Fee_Advantage_bps)} bps
                                   </td>
                                 </tr>
                               ))}

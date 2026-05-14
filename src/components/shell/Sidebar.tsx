@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, PieChart, TrendingUp, Table2, DollarSign, Target, Globe } from "lucide-react";
+import { LayoutDashboard, PieChart, TrendingUp, Table2, DollarSign, Target, Globe, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -9,6 +9,7 @@ const items = [
   { to: "/revenue", label: "Revenue & Fees Analytics", icon: DollarSign },
   { to: "/penetration", label: "Product Penetration", icon: Target },
   { to: "/ucits", label: "UCITS Snapshot", icon: Globe },
+  { to: "/new-products", label: "New Products", icon: Sparkles },
   { to: "/securities", label: "Security Detail", icon: Table2 },
 ] as const;
 

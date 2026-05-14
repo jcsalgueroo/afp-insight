@@ -1760,3 +1760,84 @@ export function getSecurityAumByAfp(isin: string, date: string) {
     .map(([AFP, AUM]) => ({ AFP, AUM }))
     .sort((a, b) => b.AUM - a.AUM);
 }
+
+// ---------- New Products (vs December 2025 baseline) ----------
+
+export const NEW_PRODUCTS_BASELINE_MONTH = "2025-12";
+
+export interface NewProductRow {
+  isin: string;
+  ticker: string;
+  name: string;
+  manager: Manager;
+  category: Category;
+  feeBps: number;
+  ytdNnb: number;
+  ytdNnbf: number;
+  aum: number;
+  byAfp: { AFP: AFP; ytdNnb: number }[];
+}
+
+/**
+ * ETFs / MFs that did not exist (or had zero AUM) in the baseline month
+ * but appear in the selected month. Aggregated across AFPs.
+ */
+export function getNewProducts(
+  date: string,
+  bucket: Bucket,
+): NewProductRow[] {
+  const baseline = NEW_PRODUCTS_BASELINE_MONTH;
+  // ISINs with non-zero AUM in baseline
+  const baselineIsins = new Set<string>();
+  for (const r of MASTER_DATA) {
+    if (r.Date === baseline && r.AUM_USD > 0) baselineIsins.add(r.ISIN);
+  }
+  const cur = MASTER_DATA.filter(
+    (r) => r.Date === date && bucketOf(r) === bucket && !baselineIsins.has(r.ISIN),
+  );
+  const map = new Map<string, NewProductRow>();
+  for (const r of cur) {
+    let row = map.get(r.ISIN);
+    if (!row) {
+      row = {
+        isin: r.ISIN,
+        ticker: r.Ticker || r.ISIN,
+        name: r.Name,
+        manager: r.Manager,
+        category: r.Category,
+        feeBps: 0,
+        ytdNnb: 0,
+        ytdNnbf: 0,
+        aum: 0,
+        byAfp: [],
+      };
+      map.set(r.ISIN, row);
+    }
+    row.ytdNnb += r.NNB_YTD_USD;
+    row.ytdNnbf += r.NNBF_YTD_USD;
+    row.aum += r.AUM_USD;
+  }
+  // AUM-weighted fee + per-AFP breakdown
+  for (const row of map.values()) {
+    const rs = cur.filter((r) => r.ISIN === row.isin);
+    const totalAum = rs.reduce((a, b) => a + b.AUM_USD, 0);
+    row.feeBps = totalAum
+      ? rs.reduce((a, b) => a + b.Fee_bps * b.AUM_USD, 0) / totalAum
+      : (rs[0]?.Fee_bps ?? 0);
+    const am = new Map<AFP, number>();
+    for (const r of rs) am.set(r.AFP, (am.get(r.AFP) ?? 0) + r.NNB_YTD_USD);
+    row.byAfp = [...am.entries()]
+      .map(([AFP, ytdNnb]) => ({ AFP, ytdNnb }))
+      .sort((a, b) => b.ytdNnb - a.ytdNnb);
+  }
+  return [...map.values()].sort((a, b) => b.ytdNnb - a.ytdNnb);
+}
+
+/** Aggregate YTD NNB by manager from a NewProductRow list, sorted desc. */
+export function aggregateNewProductsByManager(rows: NewProductRow[]) {
+  const m = new Map<Manager, number>();
+  for (const r of rows) m.set(r.manager, (m.get(r.manager) ?? 0) + r.ytdNnb);
+  return [...m.entries()]
+    .map(([Manager, NNB]) => ({ Manager, NNB }))
+    .sort((a, b) => b.NNB - a.NNB);
+}
