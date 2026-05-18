@@ -86,8 +86,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "AFP Portfolio Intelligence" },
       { name: "twitter:description", content: "Institutional analytics dashboard for the Colombian AFP market." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/7aa22dd4-0bde-4996-8fd8-c4e8aeaa7dd1/id-preview-b4dbae2d--178e94f0-06bb-4fa6-9335-1954877e14c5.lovable.app-1778731081714.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/7aa22dd4-0bde-4996-8fd8-c4e8aeaa7dd1/id-preview-b4dbae2d--178e94f0-06bb-4fa6-9335-1954877e14c5.lovable.app-1778731081714.png" },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/eeb2befc-1d9c-4912-80f3-374baf1a83e6" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/eeb2befc-1d9c-4912-80f3-374baf1a83e6" },
     ],
     links: [
       {
