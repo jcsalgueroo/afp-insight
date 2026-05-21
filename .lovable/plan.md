@@ -1,37 +1,79 @@
-## Root cause
+# Manager Deep Dive screen
 
-`Perf_Month` in `MasterRow` is **not** the raw decimal from the dataset — `src/lib/data-loader.ts` line 77 multiplies the source column by 100 on ingest:
+A new screen between AFP Deep Dive and Flows Intelligence in the sidebar. All charts are scoped to a single selected Manager (default: BlackRock).
 
-```ts
-const perfMonth = num(r.month_performance_usd) * 100;
-```
+## Routing & navigation
 
-So by the time `getCumulativePerformanceSeries` reads `r.Perf_Month`, a 17.56% return is stored as `17.56`, not `0.1756`. Doing `value × (1 + 17.56)` then explodes the cumulative line — matching the symptom you described. Last turn we "fixed" the math the wrong way based on the assumption that `Perf_Month` was still decimal in memory.
+- New route file `src/routes/manager.tsx` registering `/manager` with head meta.
+- New view `src/components/views/ManagerDeepDive.tsx`.
+- Update `src/components/shell/Sidebar.tsx` — insert `{ to: "/manager", label: "Manager Deep Dive", icon: Users }` between AFP Deep Dive and Flows Intelligence.
+- `src/routeTree.gen.ts` regenerates automatically.
 
-The other screens (Scorecard, AFP Deep Dive, etc.) already depend on `Perf_Month` being in percent units (they format it as `xx.xx%` directly). Changing the loader would break them. The right fix is local to the cumulative calculation.
+## Screen header
 
-## Changes
+- Title + subtitle.
+- `ManagerPicker` popover (single-select, default `"BlackRock"`, falls back to `MANAGERS[0]`). Local component state, independent of global filters. Reuses the `Popover` pattern used elsewhere.
+- Uses the existing global `date` from `useDashboard` for any "at selected date" charts; monthly charts span all `MONTHS` in the data.
 
-### 1. `src/lib/mock-data.ts` — `getCumulativePerformanceSeries`
+## Charts (in order)
 
-- Restore percent-aware compounding: `values[s] = values[s] * (1 + wp / 100)`. The weighted average still uses `AUM_USD` per AFP (per-AFP scope, which matches your confirmation). System line uses all rows that month.
-- Remove the `portfolioTypes` parameter and the `ptSet` filter — no longer needed. Always compute across all portfolio types.
-- Keep baseline = 100 at `2025-12`.
+### 1. Manager AUM treemap by AFP (with hover card)
 
-### 2. `src/components/views/PerformanceAnalytics.tsx` — Cumulative card
+- Treemap: one leaf per AFP. Leaf size = sum of `AUM_USD` for the selected manager at the global selected date in that AFP.
+- On hover of an AFP leaf, an overlay card (top-right, same pattern as `AFPDeepDive`) shows three blocks for `manager × AFP × date`:
+  1. Donut by **Category** (treating Category as region per your direction), top 5 + Others.
+  2. Top 5 products by `AUM_USD`. Label rule: `Ticker` for ETFs; `Name` otherwise. Shows `AUM_USD` per row.
+  3. AUM-weighted average TER = Σ(`Fee_bps` × `AUM_USD`) / Σ(`AUM_USD`), formatted as bps.
 
-- Remove the `portfolios` state and the `<MultiSelectPopover>` from the card's `right` slot.
-- Remove the `PORTFOLIO_TYPES` and `PortfolioType` imports if unused after this edit.
-- Update the `getCumulativePerformanceSeries(date)` call signature.
+### 2. NNB by category — grouped bar
 
-### 3. No other charts touched
+- One group per `Category` filtered to the selected manager.
+- 4 bars per group (one per AFP), colored by `afpColor`.
+- Toggles: Equity / Fixed Income / All (`ASSET_CLASS_TOGGLE`) and Month / YTD (`PERIOD_TOGGLE`).
+- "All" filter is added per your answer; metric switches between `NNB_Month_USD` and `NNB_YTD_USD`.
 
-The three scatter charts and tooltips stay exactly as they are — this is only about the cumulative line and removing one filter.
+### 3 & 4. Top 5 / Bottom 5 securities — two cards
 
-## Verification
+- Universe: rows where `Manager === selectedManager` at the global selected date.
+- One card for NNB, one card for NNBF.
+- Each card has its own Month / YTD toggle and an All / Equity / Fixed Income toggle.
+- Horizontal bar chart: top 5 positive + bottom 5 negative by chosen metric (`NNB_Month_USD`/`NNB_YTD_USD`/`NNBF_Month_USD`/`NNBF_YTD_USD`), aggregated by ISIN. Label = Ticker for ETFs, Name otherwise.
 
-After the edit, the Dec 2025 anchor stays at 100 and the Jan→Nov 2026 values should land in the ~85–115 range you described, with each AFP's path differing based on its own AUM-weighted monthly returns. I'll spot-check the rendered chart in the preview.
+### 5 & 6. AUM Org by AFP and RRR Org by AFP — two stacked bar charts
 
-## Open question (low risk)
+- X axis: every month in `MONTHS`. Y axis: USD.
+- Per month, stack one segment per AFP, colored by `afpColor`. Values filtered to selected manager.
+- Metric 5 = `AUM_USD`. Metric 6 = `RRR_USD`.
 
-There is no portfolio filter anymore, so the chart always reflects the full multi-portfolio book per AFP. Confirming that's what you want — i.e. one line per AFP aggregated across Type A/B/C/D/E together, not five lines × five portfolios. If you'd rather see per-portfolio breakdowns later, that's a different chart and we can add it as a separate card.
+### 7. RRR Org composition by product — monthly stacked bar
+
+- Per month, recompute the 5 ISINs with the largest absolute `RRR_USD` for the selected manager that month; bucket the rest into "Others".
+- Stack labels: Ticker (ETFs) / Name (else). Colors from a stable palette keyed by ISIN with "Others" gray.
+
+## Data layer additions (`src/lib/mock-data.ts`)
+
+Pure selectors, no schema changes:
+
+- `getManagerAumByAfp(manager, date)` → `[{ afp, aum }]`.
+- `getManagerAfpDonut(manager, afp, date)` → top-5 categories + Others.
+- `getManagerAfpTopProducts(manager, afp, date, n=5)` → `[{ isin, label, name, aum }]`.
+- `getManagerAfpTer(manager, afp, date)` → number (bps).
+- `getManagerNnbByCategoryByAfp(manager, period, assetClass, date)` → `[{ category, [afp]: number }]`.
+- `getManagerTopBottomSecurities(manager, metric, period, assetClass, date, n=5)` → `[{ isin, label, value }]`.
+- `getManagerMonthlyByAfp(manager, metric)` → `[{ m, [afp]: number }]` across all `MONTHS`.
+- `getManagerRrrCompositionMonthly(manager)` → `{ data: [{ m, [productKey]: number }], productsPerMonth }` recomputed per month with top-5 + Others.
+
+Asset-class filtering reuses `categoryAssetClass` already in `mock-data.ts`.
+
+## Files to add / edit
+
+- Add `src/routes/manager.tsx`.
+- Add `src/components/views/ManagerDeepDive.tsx`.
+- Edit `src/components/shell/Sidebar.tsx` (insert nav item).
+- Edit `src/lib/mock-data.ts` (selectors above).
+
+## Out of scope
+
+- No CSV/loader changes; uses existing `MasterRow` fields.
+- No global filter changes; Manager filter is local to this screen.
+- No new design tokens.
