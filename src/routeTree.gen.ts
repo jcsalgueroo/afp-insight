@@ -16,6 +16,7 @@ import { Route as RevenueRouteImport } from './routes/revenue'
 import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as PenetrationRouteImport } from './routes/penetration'
 import { Route as NewProductsRouteImport } from './routes/new-products'
+import { Route as ManagerRouteImport } from './routes/manager'
 import { Route as FlowsRouteImport } from './routes/flows'
 import { Route as AfpRouteImport } from './routes/afp'
 import { Route as IndexRouteImport } from './routes/index'
@@ -55,6 +56,11 @@ const NewProductsRoute = NewProductsRouteImport.update({
   path: '/new-products',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ManagerRoute = ManagerRouteImport.update({
+  id: '/manager',
+  path: '/manager',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FlowsRoute = FlowsRouteImport.update({
   id: '/flows',
   path: '/flows',
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/afp': typeof AfpRoute
   '/flows': typeof FlowsRoute
+  '/manager': typeof ManagerRoute
   '/new-products': typeof NewProductsRoute
   '/penetration': typeof PenetrationRoute
   '/performance': typeof PerformanceRoute
@@ -87,6 +94,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/afp': typeof AfpRoute
   '/flows': typeof FlowsRoute
+  '/manager': typeof ManagerRoute
   '/new-products': typeof NewProductsRoute
   '/penetration': typeof PenetrationRoute
   '/performance': typeof PerformanceRoute
@@ -100,6 +108,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/afp': typeof AfpRoute
   '/flows': typeof FlowsRoute
+  '/manager': typeof ManagerRoute
   '/new-products': typeof NewProductsRoute
   '/penetration': typeof PenetrationRoute
   '/performance': typeof PerformanceRoute
@@ -114,6 +123,7 @@ export interface FileRouteTypes {
     | '/'
     | '/afp'
     | '/flows'
+    | '/manager'
     | '/new-products'
     | '/penetration'
     | '/performance'
@@ -126,6 +136,7 @@ export interface FileRouteTypes {
     | '/'
     | '/afp'
     | '/flows'
+    | '/manager'
     | '/new-products'
     | '/penetration'
     | '/performance'
@@ -138,6 +149,7 @@ export interface FileRouteTypes {
     | '/'
     | '/afp'
     | '/flows'
+    | '/manager'
     | '/new-products'
     | '/penetration'
     | '/performance'
@@ -151,6 +163,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AfpRoute: typeof AfpRoute
   FlowsRoute: typeof FlowsRoute
+  ManagerRoute: typeof ManagerRoute
   NewProductsRoute: typeof NewProductsRoute
   PenetrationRoute: typeof PenetrationRoute
   PerformanceRoute: typeof PerformanceRoute
@@ -211,6 +224,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NewProductsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/manager': {
+      id: '/manager'
+      path: '/manager'
+      fullPath: '/manager'
+      preLoaderRoute: typeof ManagerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/flows': {
       id: '/flows'
       path: '/flows'
@@ -239,6 +259,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AfpRoute: AfpRoute,
   FlowsRoute: FlowsRoute,
+  ManagerRoute: ManagerRoute,
   NewProductsRoute: NewProductsRoute,
   PenetrationRoute: PenetrationRoute,
   PerformanceRoute: PerformanceRoute,
@@ -250,3 +271,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
