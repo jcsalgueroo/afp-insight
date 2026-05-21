@@ -2181,3 +2181,180 @@ function topHoldingsFor(rows: MasterRow[], n: number): { name: string; aum: numb
     .sort((a, b) => b.aum - a.aum)
     .slice(0, n);
 }
+
+// ---------- Manager Deep Dive selectors ----------
+
+function productLabel(r: MasterRow) {
+  return r.Asset_Type === "ETF" && r.Ticker ? r.Ticker : r.Name;
+}
+
+/** Per-AFP AUM for a single manager at a given date. */
+export function getManagerAumByAfp(manager: Manager, date: string) {
+  const rows = MASTER_DATA.filter((r) => r.Date === date && r.Manager === manager);
+  const map = new Map<AFP, number>();
+  for (const a of AFPS) map.set(a, 0);
+  for (const r of rows) map.set(r.AFP, (map.get(r.AFP) ?? 0) + r.AUM_USD);
+  return [...map.entries()]
+    .map(([afp, aum]) => ({ name: afp, size: aum, afp, fill: afpColor(afp) }))
+    .filter((d) => d.size > 0)
+    .sort((a, b) => b.size - a.size);
+}
+
+/** Top-5 categories + Others for (manager, AFP, date). Used as the "by region" donut. */
+export function getManagerAfpCategoryDonut(manager: Manager, afp: AFP, date: string) {
+  const rows = MASTER_DATA.filter(
+    (r) => r.Date === date && r.Manager === manager && r.AFP === afp,
+  );
+  const map = new Map<Category, number>();
+  for (const r of rows) map.set(r.Category, (map.get(r.Category) ?? 0) + r.AUM_USD);
+  const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, 5);
+  const rest = sorted.slice(5).reduce((a, [, v]) => a + v, 0);
+  const items = top.map(([name, value]) => ({
+    name,
+    value,
+    fill: categoryColor(name as Category),
+  }));
+  if (rest > 0) items.push({ name: "Others", value: rest, fill: CHART_COLORS.competitor });
+  return items;
+}
+
+/** Top-n products by AUM for (manager, AFP, date). Label = ticker (ETF) or name. */
+export function getManagerAfpTopProducts(
+  manager: Manager,
+  afp: AFP,
+  date: string,
+  n = 5,
+) {
+  const rows = MASTER_DATA.filter(
+    (r) => r.Date === date && r.Manager === manager && r.AFP === afp,
+  );
+  const map = new Map<string, { isin: string; label: string; name: string; aum: number }>();
+  for (const r of rows) {
+    const cur = map.get(r.ISIN);
+    if (cur) cur.aum += r.AUM_USD;
+    else map.set(r.ISIN, { isin: r.ISIN, label: productLabel(r), name: r.Name, aum: r.AUM_USD });
+  }
+  return [...map.values()].sort((a, b) => b.aum - a.aum).slice(0, n);
+}
+
+/** AUM-weighted average Fee_bps for (manager, AFP, date). */
+export function getManagerAfpTer(manager: Manager, afp: AFP, date: string): number {
+  const rows = MASTER_DATA.filter(
+    (r) => r.Date === date && r.Manager === manager && r.AFP === afp,
+  );
+  let num = 0;
+  let den = 0;
+  for (const r of rows) {
+    num += r.Fee_bps * r.AUM_USD;
+    den += r.AUM_USD;
+  }
+  return den ? num / den : 0;
+}
+
+/** NNB by Category × AFP for a manager. Returns one row per category with one numeric key per AFP. */
+export function getManagerNnbByCategoryByAfp(
+  manager: Manager,
+  period: "Month" | "YTD",
+  assetClass: "All" | "Equity" | "Fixed Income",
+  date: string,
+) {
+  const rows = MASTER_DATA.filter((r) => r.Date === date && r.Manager === manager);
+  const cats = CATEGORIES.filter((c) =>
+    assetClass === "All" ? true : categoryAssetClass(c) === assetClass,
+  );
+  const metric = period === "Month" ? "NNB_Month_USD" : "NNB_YTD_USD";
+  const data = cats.map((cat) => {
+    const row: Record<string, number | string> = { category: cat };
+    for (const a of AFPS) row[a] = 0;
+    for (const r of rows.filter((r) => r.Category === cat)) {
+      row[r.AFP] = (row[r.AFP] as number) + r[metric];
+    }
+    return row;
+  });
+  // Drop empty rows
+  return data.filter((row) => AFPS.some((a) => Math.abs(row[a] as number) > 0));
+}
+
+/** Top-n + Bottom-n securities by signed metric for a manager. */
+export function getManagerTopBottomSecurities(
+  manager: Manager,
+  metric: "NNB" | "NNBF",
+  period: "Month" | "YTD",
+  assetClass: "All" | "Equity" | "Fixed Income",
+  date: string,
+  n = 5,
+) {
+  const key =
+    metric === "NNB"
+      ? period === "Month"
+        ? "NNB_Month_USD"
+        : "NNB_YTD_USD"
+      : period === "Month"
+        ? "NNBF_Month_USD"
+        : "NNBF_YTD_USD";
+  const rows = MASTER_DATA.filter((r) => {
+    if (r.Date !== date) return false;
+    if (r.Manager !== manager) return false;
+    if (assetClass !== "All" && categoryAssetClass(r.Category) !== assetClass) return false;
+    return true;
+  });
+  const map = new Map<string, { isin: string; label: string; name: string; value: number }>();
+  for (const r of rows) {
+    const cur = map.get(r.ISIN);
+    const v = r[key];
+    if (cur) cur.value += v;
+    else map.set(r.ISIN, { isin: r.ISIN, label: productLabel(r), name: r.Name, value: v });
+  }
+  const arr = [...map.values()];
+  const sorted = [...arr].sort((a, b) => b.value - a.value);
+  const top = sorted.slice(0, n).filter((d) => d.value > 0);
+  const bottom = sorted
+    .slice(-n)
+    .filter((d) => d.value < 0)
+    .reverse(); // most negative first
+  return { top, bottom };
+}
+
+/** Monthly per-AFP stacked series for a manager. Metric = AUM_USD or RRR_USD. */
+export function getManagerMonthlyByAfp(
+  manager: Manager,
+  metric: "AUM_USD" | "RRR_USD",
+) {
+  return MONTHS.map((m) => {
+    const row: Record<string, number | string> = { m };
+    for (const a of AFPS) row[a] = 0;
+    for (const r of MASTER_DATA) {
+      if (r.Date !== m || r.Manager !== manager) continue;
+      row[r.AFP] = (row[r.AFP] as number) + r[metric];
+    }
+    return row;
+  });
+}
+
+/** Monthly RRR composition by product for a manager. Top-5 ISINs recomputed each month + Others. */
+export function getManagerRrrCompositionMonthly(manager: Manager) {
+  const productLabels = new Map<string, string>(); // isin -> label
+  const data = MONTHS.map((m) => {
+    const rows = MASTER_DATA.filter((r) => r.Date === m && r.Manager === manager);
+    const map = new Map<string, { label: string; value: number }>();
+    for (const r of rows) {
+      const cur = map.get(r.ISIN);
+      if (cur) cur.value += r.RRR_USD;
+      else map.set(r.ISIN, { label: productLabel(r), value: r.RRR_USD });
+    }
+    const sorted = [...map.entries()].sort(
+      (a, b) => Math.abs(b[1].value) - Math.abs(a[1].value),
+    );
+    const top = sorted.slice(0, 5);
+    const rest = sorted.slice(5).reduce((a, [, v]) => a + v.value, 0);
+    const row: Record<string, number | string> = { m };
+    for (const [isin, { label, value }] of top) {
+      row[isin] = value;
+      productLabels.set(isin, label);
+    }
+    row["__others"] = rest;
+    return row;
+  });
+  return { data, productLabels };
+}

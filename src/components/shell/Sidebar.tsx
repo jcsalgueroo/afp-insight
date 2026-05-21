@@ -1,10 +1,11 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, PieChart, TrendingUp, Table2, DollarSign, Target, Globe, Sparkles, LineChart, Crosshair } from "lucide-react";
+import { LayoutDashboard, PieChart, TrendingUp, Table2, DollarSign, Target, Globe, Sparkles, LineChart, Crosshair, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
   { to: "/", label: "System Summary", icon: LayoutDashboard },
   { to: "/afp", label: "AFP Deep Dive", icon: PieChart },
+  { to: "/manager", label: "Manager Deep Dive", icon: Users },
   { to: "/flows", label: "Flows Intelligence", icon: TrendingUp },
   { to: "/performance", label: "Performance Analytics", icon: LineChart },
   { to: "/revenue", label: "Revenue & Fees Analytics", icon: DollarSign },
