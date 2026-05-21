@@ -30,6 +30,7 @@ import {
   getManagerMonthlyByAfp,
   getManagerNnbByCategoryByAfp,
   getManagerRrrCompositionMonthly,
+  getManagerSecurityByAfp,
   getManagerTopBottomSecurities,
   type AFP,
   type Manager,
@@ -381,6 +382,9 @@ export function ManagerDeepDive() {
       <div className="grid lg:grid-cols-2 gap-6">
         <TopBottomCard
           title={`Top 5 / Bottom 5 Securities — NNB`}
+          manager={manager}
+          date={date}
+          metric="NNB"
           period={nnbSecPeriod}
           setPeriod={setNnbSecPeriod}
           assetClass={nnbSecAc}
@@ -390,6 +394,9 @@ export function ManagerDeepDive() {
         />
         <TopBottomCard
           title={`Top 5 / Bottom 5 Securities — NNBF`}
+          manager={manager}
+          date={date}
+          metric="NNBF"
           period={nnbfSecPeriod}
           setPeriod={setNnbfSecPeriod}
           assetClass={nnbfSecAc}
@@ -517,6 +524,9 @@ export function ManagerDeepDive() {
 
 function TopBottomCard({
   title,
+  manager,
+  date,
+  metric,
   period,
   setPeriod,
   assetClass,
@@ -525,6 +535,9 @@ function TopBottomCard({
   bottom,
 }: {
   title: string;
+  manager: Manager;
+  date: string;
+  metric: "NNB" | "NNBF";
   period: "Month" | "YTD";
   setPeriod: (v: "Month" | "YTD") => void;
   assetClass: AcFilter;
@@ -536,6 +549,17 @@ function TopBottomCard({
     ...top.map((d) => ({ ...d, fill: CHART_COLORS.positive })),
     ...bottom.map((d) => ({ ...d, fill: CHART_COLORS.negative })),
   ];
+  const [hovered, setHovered] = useState<{ isin: string; label: string; value: number } | null>(
+    null,
+  );
+  const donut = useMemo(
+    () =>
+      hovered
+        ? getManagerSecurityByAfp(manager, hovered.isin, metric, period, date)
+        : [],
+    [hovered, manager, metric, period, date],
+  );
+  const donutTotal = donut.reduce((a, b) => a + b.value, 0);
   return (
     <CardShell
       title={title}
@@ -550,7 +574,7 @@ function TopBottomCard({
         </>
       }
     >
-      <div className="h-80">
+      <div className="h-80 relative">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
@@ -572,13 +596,78 @@ function TopBottomCard({
               formatter={(v: number) => formatUSD(v)}
               cursor={{ fill: "rgba(0,0,0,0.04)" }}
             />
-            <Bar dataKey="value" isAnimationActive={false}>
+            <Bar
+              dataKey="value"
+              isAnimationActive={false}
+              onMouseEnter={(d: any) =>
+                setHovered({ isin: d.isin, label: d.label, value: d.value })
+              }
+              onMouseLeave={() => setHovered(null)}
+            >
               {data.map((d) => (
                 <Cell key={d.isin} fill={d.fill} />
               ))}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
+
+        {hovered && (
+          <div className="pointer-events-none absolute top-3 right-3 w-72 max-w-[calc(100%-1.5rem)] rounded-md bg-card/95 border border-border shadow-lg p-3 space-y-2">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              {metric} by AFP
+            </div>
+            <div className="text-xs font-medium truncate">{hovered.label}</div>
+            {donut.length === 0 ? (
+              <div className="text-[11px] text-muted-foreground italic">No AFP breakdown</div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="relative w-24 h-24 shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={donut.map((d) => ({ ...d, value: Math.abs(d.value) }))}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={24}
+                        outerRadius={46}
+                        paddingAngle={1}
+                        isAnimationActive={false}
+                      >
+                        {donut.map((d) => (
+                          <Cell key={d.name} fill={d.fill} stroke="#fff" />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex items-center justify-center flex-col">
+                    <span className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                      Total
+                    </span>
+                    <span className="text-[10px] font-semibold tabular-nums">
+                      {formatUSD(donutTotal)}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col gap-0.5 text-[10px]">
+                  {donut.map((d) => (
+                    <div key={d.name} className="flex items-center gap-1.5">
+                      <span
+                        className="inline-block w-2 h-2 rounded-sm shrink-0"
+                        style={{ background: d.fill }}
+                      />
+                      <span className="truncate">{d.name}</span>
+                      <span className="ml-auto tabular-nums text-muted-foreground shrink-0">
+                        {formatUSD(d.value)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </CardShell>
   );

@@ -2332,6 +2332,30 @@ export function getManagerMonthlyByAfp(
   });
 }
 
+/** Composition of a security's NNB or NNBF by AFP for a given manager/date/period. */
+export function getManagerSecurityByAfp(
+  manager: Manager,
+  isin: string,
+  metric: "NNB" | "NNBF",
+  period: "Month" | "YTD",
+  date: string,
+) {
+  const key =
+    metric === "NNB"
+      ? period === "Month"
+        ? "NNB_Month_USD"
+        : "NNB_YTD_USD"
+      : period === "Month"
+        ? "NNBF_Month_USD"
+        : "NNBF_YTD_USD";
+  return AFPS.map((a) => {
+    const value = MASTER_DATA.filter(
+      (r) => r.Date === date && r.Manager === manager && r.ISIN === isin && r.AFP === a,
+    ).reduce((acc, r) => acc + r[key], 0);
+    return { name: a, value, fill: afpColor(a) };
+  }).filter((d) => Math.abs(d.value) > 0);
+}
+
 /** Monthly RRR composition by product for a manager. Top-5 ISINs recomputed each month + Others. */
 export function getManagerRrrCompositionMonthly(manager: Manager) {
   const productLabels = new Map<string, string>(); // isin -> label
