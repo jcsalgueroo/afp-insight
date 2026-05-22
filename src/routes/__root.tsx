@@ -13,6 +13,7 @@ import { TopNav } from "@/components/shell/TopNav";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { DataGate } from "@/components/shell/DataGate";
 import { PasswordGate } from "@/components/shell/PasswordGate";
+import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
   return (
@@ -133,6 +134,7 @@ function RootComponent() {
             </main>
           </div>
         </div>
+        <Toaster />
       </PasswordGate>
     </QueryClientProvider>
   );
