@@ -2188,9 +2188,17 @@ function productLabel(r: MasterRow) {
   return r.Asset_Type === "ETF" && r.Ticker ? r.Ticker : r.Name;
 }
 
+export type FundType = "All" | "ETF" | "Mutual Fund" | "Money Market";
+export const FUND_TYPES: FundType[] = ["All", "ETF", "Mutual Fund", "Money Market"];
+function matchesFundType(r: MasterRow, ft: FundType) {
+  return ft === "All" ? true : bucketOf(r) === ft;
+}
+
 /** Per-AFP AUM for a single manager at a given date. */
-export function getManagerAumByAfp(manager: Manager, date: string) {
-  const rows = MASTER_DATA.filter((r) => r.Date === date && r.Manager === manager);
+export function getManagerAumByAfp(manager: Manager, date: string, fundType: FundType = "All") {
+  const rows = MASTER_DATA.filter(
+    (r) => r.Date === date && r.Manager === manager && matchesFundType(r, fundType),
+  );
   const map = new Map<AFP, number>();
   for (const a of AFPS) map.set(a, 0);
   for (const r of rows) map.set(r.AFP, (map.get(r.AFP) ?? 0) + r.AUM_USD);
@@ -2201,9 +2209,18 @@ export function getManagerAumByAfp(manager: Manager, date: string) {
 }
 
 /** Top-5 categories + Others for (manager, AFP, date). Used as the "by region" donut. */
-export function getManagerAfpCategoryDonut(manager: Manager, afp: AFP, date: string) {
+export function getManagerAfpCategoryDonut(
+  manager: Manager,
+  afp: AFP,
+  date: string,
+  fundType: FundType = "All",
+) {
   const rows = MASTER_DATA.filter(
-    (r) => r.Date === date && r.Manager === manager && r.AFP === afp,
+    (r) =>
+      r.Date === date &&
+      r.Manager === manager &&
+      r.AFP === afp &&
+      matchesFundType(r, fundType),
   );
   const map = new Map<Category, number>();
   for (const r of rows) map.set(r.Category, (map.get(r.Category) ?? 0) + r.AUM_USD);
@@ -2225,9 +2242,14 @@ export function getManagerAfpTopProducts(
   afp: AFP,
   date: string,
   n = 5,
+  fundType: FundType = "All",
 ) {
   const rows = MASTER_DATA.filter(
-    (r) => r.Date === date && r.Manager === manager && r.AFP === afp,
+    (r) =>
+      r.Date === date &&
+      r.Manager === manager &&
+      r.AFP === afp &&
+      matchesFundType(r, fundType),
   );
   const map = new Map<string, { isin: string; label: string; name: string; aum: number }>();
   for (const r of rows) {
@@ -2239,9 +2261,18 @@ export function getManagerAfpTopProducts(
 }
 
 /** AUM-weighted average Fee_bps for (manager, AFP, date). */
-export function getManagerAfpTer(manager: Manager, afp: AFP, date: string): number {
+export function getManagerAfpTer(
+  manager: Manager,
+  afp: AFP,
+  date: string,
+  fundType: FundType = "All",
+): number {
   const rows = MASTER_DATA.filter(
-    (r) => r.Date === date && r.Manager === manager && r.AFP === afp,
+    (r) =>
+      r.Date === date &&
+      r.Manager === manager &&
+      r.AFP === afp &&
+      matchesFundType(r, fundType),
   );
   let num = 0;
   let den = 0;
@@ -2258,8 +2289,11 @@ export function getManagerNnbByCategoryByAfp(
   period: "Month" | "YTD",
   assetClass: "All" | "Equity" | "Fixed Income",
   date: string,
+  fundType: FundType = "All",
 ) {
-  const rows = MASTER_DATA.filter((r) => r.Date === date && r.Manager === manager);
+  const rows = MASTER_DATA.filter(
+    (r) => r.Date === date && r.Manager === manager && matchesFundType(r, fundType),
+  );
   const cats = CATEGORIES.filter((c) =>
     assetClass === "All" ? true : categoryAssetClass(c) === assetClass,
   );
@@ -2284,6 +2318,7 @@ export function getManagerTopBottomSecurities(
   assetClass: "All" | "Equity" | "Fixed Income",
   date: string,
   n = 5,
+  fundType: FundType = "All",
 ) {
   const key =
     metric === "NNB"
@@ -2297,6 +2332,7 @@ export function getManagerTopBottomSecurities(
     if (r.Date !== date) return false;
     if (r.Manager !== manager) return false;
     if (assetClass !== "All" && categoryAssetClass(r.Category) !== assetClass) return false;
+    if (!matchesFundType(r, fundType)) return false;
     return true;
   });
   const map = new Map<string, { isin: string; label: string; name: string; value: number }>();
@@ -2320,12 +2356,14 @@ export function getManagerTopBottomSecurities(
 export function getManagerMonthlyByAfp(
   manager: Manager,
   metric: "AUM_USD" | "RRR_USD",
+  fundType: FundType = "All",
 ) {
   return MONTHS.map((m) => {
     const row: Record<string, number | string> = { m };
     for (const a of AFPS) row[a] = 0;
     for (const r of MASTER_DATA) {
       if (r.Date !== m || r.Manager !== manager) continue;
+      if (!matchesFundType(r, fundType)) continue;
       row[r.AFP] = (row[r.AFP] as number) + r[metric];
     }
     return row;
@@ -2339,6 +2377,7 @@ export function getManagerSecurityByAfp(
   metric: "NNB" | "NNBF",
   period: "Month" | "YTD",
   date: string,
+  fundType: FundType = "All",
 ) {
   const key =
     metric === "NNB"
@@ -2350,17 +2389,24 @@ export function getManagerSecurityByAfp(
         : "NNBF_YTD_USD";
   return AFPS.map((a) => {
     const value = MASTER_DATA.filter(
-      (r) => r.Date === date && r.Manager === manager && r.ISIN === isin && r.AFP === a,
+      (r) =>
+        r.Date === date &&
+        r.Manager === manager &&
+        r.ISIN === isin &&
+        r.AFP === a &&
+        matchesFundType(r, fundType),
     ).reduce((acc, r) => acc + r[key], 0);
     return { name: a, value, fill: afpColor(a) };
   }).filter((d) => Math.abs(d.value) > 0);
 }
 
 /** Monthly RRR composition by product for a manager. Top-5 ISINs recomputed each month + Others. */
-export function getManagerRrrCompositionMonthly(manager: Manager) {
+export function getManagerRrrCompositionMonthly(manager: Manager, fundType: FundType = "All") {
   const productLabels = new Map<string, string>(); // isin -> label
   const data = MONTHS.map((m) => {
-    const rows = MASTER_DATA.filter((r) => r.Date === m && r.Manager === manager);
+    const rows = MASTER_DATA.filter(
+      (r) => r.Date === m && r.Manager === manager && matchesFundType(r, fundType),
+    );
     const map = new Map<string, { label: string; value: number }>();
     for (const r of rows) {
       const cur = map.get(r.ISIN);
