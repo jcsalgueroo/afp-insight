@@ -33,6 +33,7 @@ import {
   getManagerSecurityByAfp,
   getManagerTopBottomSecurities,
   type AFP,
+  type FundType,
   type Manager,
 } from "@/lib/mock-data";
 import { useDashboard } from "@/lib/dashboard-store";
@@ -57,6 +58,13 @@ const EQ_FI_TOGGLE = [
   { value: "Fixed Income" as const, label: "Fixed Income" },
 ] as const;
 type AcFilter = "All" | "Equity" | "Fixed Income";
+
+const FUND_TYPE_TOGGLE = [
+  { value: "All" as const, label: "All" },
+  { value: "ETF" as const, label: "ETF" },
+  { value: "Mutual Fund" as const, label: "MF" },
+  { value: "Money Market" as const, label: "MM" },
+] as const;
 
 const tooltipStyle = { fontSize: 12, border: "1px solid #E5E5E5", borderRadius: 4 } as const;
 
@@ -141,21 +149,25 @@ export function ManagerDeepDive() {
   const defaultManager: Manager =
     MANAGERS.find((m) => m === "BlackRock") ?? MANAGERS[0] ?? "BlackRock";
   const [manager, setManager] = useState<Manager>(defaultManager);
+  const [fundType, setFundType] = useState<FundType>("All");
 
   // 1. Treemap data + hover
-  const treeData = useMemo(() => getManagerAumByAfp(manager, date), [manager, date]);
+  const treeData = useMemo(
+    () => getManagerAumByAfp(manager, date, fundType),
+    [manager, date, fundType],
+  );
   const [hoveredAfp, setHoveredAfp] = useState<AFP | null>(null);
   const hoverDonut = useMemo(
-    () => (hoveredAfp ? getManagerAfpCategoryDonut(manager, hoveredAfp, date) : null),
-    [manager, hoveredAfp, date],
+    () => (hoveredAfp ? getManagerAfpCategoryDonut(manager, hoveredAfp, date, fundType) : null),
+    [manager, hoveredAfp, date, fundType],
   );
   const hoverTop = useMemo(
-    () => (hoveredAfp ? getManagerAfpTopProducts(manager, hoveredAfp, date, 5) : []),
-    [manager, hoveredAfp, date],
+    () => (hoveredAfp ? getManagerAfpTopProducts(manager, hoveredAfp, date, 5, fundType) : []),
+    [manager, hoveredAfp, date, fundType],
   );
   const hoverTer = useMemo(
-    () => (hoveredAfp ? getManagerAfpTer(manager, hoveredAfp, date) : 0),
-    [manager, hoveredAfp, date],
+    () => (hoveredAfp ? getManagerAfpTer(manager, hoveredAfp, date, fundType) : 0),
+    [manager, hoveredAfp, date, fundType],
   );
   const hoverTopTotal = hoverTop.reduce((a, b) => a + b.aum, 0);
   const donutTotal = hoverDonut?.reduce((a, b) => a + b.value, 0) ?? 0;
@@ -164,30 +176,39 @@ export function ManagerDeepDive() {
   const [nnbPeriod, setNnbPeriod] = useState<"Month" | "YTD">("Month");
   const [nnbAc, setNnbAc] = useState<AcFilter>("All");
   const nnbCatData = useMemo(
-    () => getManagerNnbByCategoryByAfp(manager, nnbPeriod, nnbAc, date),
-    [manager, nnbPeriod, nnbAc, date],
+    () => getManagerNnbByCategoryByAfp(manager, nnbPeriod, nnbAc, date, fundType),
+    [manager, nnbPeriod, nnbAc, date, fundType],
   );
 
   // 3 & 4. Top/Bottom securities
   const [nnbSecPeriod, setNnbSecPeriod] = useState<"Month" | "YTD">("Month");
   const [nnbSecAc, setNnbSecAc] = useState<AcFilter>("All");
   const nnbSec = useMemo(
-    () => getManagerTopBottomSecurities(manager, "NNB", nnbSecPeriod, nnbSecAc, date),
-    [manager, nnbSecPeriod, nnbSecAc, date],
+    () => getManagerTopBottomSecurities(manager, "NNB", nnbSecPeriod, nnbSecAc, date, 5, fundType),
+    [manager, nnbSecPeriod, nnbSecAc, date, fundType],
   );
   const [nnbfSecPeriod, setNnbfSecPeriod] = useState<"Month" | "YTD">("Month");
   const [nnbfSecAc, setNnbfSecAc] = useState<AcFilter>("All");
   const nnbfSec = useMemo(
-    () => getManagerTopBottomSecurities(manager, "NNBF", nnbfSecPeriod, nnbfSecAc, date),
-    [manager, nnbfSecPeriod, nnbfSecAc, date],
+    () => getManagerTopBottomSecurities(manager, "NNBF", nnbfSecPeriod, nnbfSecAc, date, 5, fundType),
+    [manager, nnbfSecPeriod, nnbfSecAc, date, fundType],
   );
 
   // 5 & 6. Monthly AUM/RRR by AFP
-  const aumMonthly = useMemo(() => getManagerMonthlyByAfp(manager, "AUM_USD"), [manager]);
-  const rrrMonthly = useMemo(() => getManagerMonthlyByAfp(manager, "RRR_USD"), [manager]);
+  const aumMonthly = useMemo(
+    () => getManagerMonthlyByAfp(manager, "AUM_USD", fundType),
+    [manager, fundType],
+  );
+  const rrrMonthly = useMemo(
+    () => getManagerMonthlyByAfp(manager, "RRR_USD", fundType),
+    [manager, fundType],
+  );
 
   // 7. RRR composition by product
-  const rrrComp = useMemo(() => getManagerRrrCompositionMonthly(manager), [manager]);
+  const rrrComp = useMemo(
+    () => getManagerRrrCompositionMonthly(manager, fundType),
+    [manager, fundType],
+  );
   const rrrCompKeys = useMemo(() => {
     const s = new Set<string>();
     for (const row of rrrComp.data) {
@@ -227,7 +248,10 @@ export function ManagerDeepDive() {
             AUM, flows and revenue analytics for the selected manager across AFPs.
           </p>
         </div>
-        <ManagerPicker value={manager} onChange={setManager} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <ManagerPicker value={manager} onChange={setManager} />
+          <SegmentedToggle options={FUND_TYPE_TOGGLE} value={fundType} onChange={setFundType} />
+        </div>
       </div>
 
       {/* 1. AUM treemap by AFP with hover card */}
@@ -385,6 +409,7 @@ export function ManagerDeepDive() {
           manager={manager}
           date={date}
           metric="NNB"
+          fundType={fundType}
           period={nnbSecPeriod}
           setPeriod={setNnbSecPeriod}
           assetClass={nnbSecAc}
@@ -397,6 +422,7 @@ export function ManagerDeepDive() {
           manager={manager}
           date={date}
           metric="NNBF"
+          fundType={fundType}
           period={nnbfSecPeriod}
           setPeriod={setNnbfSecPeriod}
           assetClass={nnbfSecAc}
@@ -527,6 +553,7 @@ function TopBottomCard({
   manager,
   date,
   metric,
+  fundType,
   period,
   setPeriod,
   assetClass,
@@ -538,6 +565,7 @@ function TopBottomCard({
   manager: Manager;
   date: string;
   metric: "NNB" | "NNBF";
+  fundType: FundType;
   period: "Month" | "YTD";
   setPeriod: (v: "Month" | "YTD") => void;
   assetClass: AcFilter;
@@ -555,9 +583,9 @@ function TopBottomCard({
   const donut = useMemo(
     () =>
       hovered
-        ? getManagerSecurityByAfp(manager, hovered.isin, metric, period, date)
+        ? getManagerSecurityByAfp(manager, hovered.isin, metric, period, date, fundType)
         : [],
-    [hovered, manager, metric, period, date],
+    [hovered, manager, metric, period, date, fundType],
   );
   const donutTotal = donut.reduce((a, b) => a + b.value, 0);
   return (
