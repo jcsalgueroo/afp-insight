@@ -187,6 +187,7 @@ export function AFPDeepDive() {
   const [posAssetClass, setPosAssetClass] = useState<AssetClassFilter>("All");
   const [posPortfolio, setPosPortfolio] = useState<PortfolioType | "All">("All");
   const [posSearch, setPosSearch] = useState("");
+  const [posFlowMetric, setPosFlowMetric] = useState<"NNB" | "NNBF">("NNB");
   const [openPosCat, setOpenPosCat] = useState<Set<Category>>(new Set());
   const toggleSet = (s: Set<string>, key: string, setter: (n: Set<string>) => void) => {
     const n = new Set(s);
@@ -373,6 +374,14 @@ export function AFPDeepDive() {
           <>
             <SegmentedToggle options={BUCKET_TOGGLE} value={posBucket} onChange={setPosBucket} />
             <SegmentedToggle options={ASSET_CLASS_TOGGLE} value={posAssetClass} onChange={setPosAssetClass} />
+            <SegmentedToggle
+              options={[
+                { value: "NNB" as const, label: "NNB" },
+                { value: "NNBF" as const, label: "NNBF" },
+              ]}
+              value={posFlowMetric}
+              onChange={setPosFlowMetric}
+            />
             <PortfolioPicker value={posPortfolio} onChange={setPosPortfolio} />
             <div className="relative">
               <Search className="h-3 w-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -394,8 +403,8 @@ export function AFPDeepDive() {
                 <th className="px-5 py-2 font-medium">Manager</th>
                 <th className="px-5 py-2 font-medium text-right">AUM Org</th>
                 <th className="px-5 py-2 font-medium text-right">% Portfolio</th>
-                <th className="px-5 py-2 font-medium text-right">Month NNB</th>
-                <th className="px-5 py-2 font-medium text-right">YTD NNB</th>
+                <th className="px-5 py-2 font-medium text-right">Month {posFlowMetric}</th>
+                <th className="px-5 py-2 font-medium text-right">YTD {posFlowMetric}</th>
               </tr>
             </thead>
             <tbody>
@@ -428,22 +437,20 @@ export function AFPDeepDive() {
                       <td className="px-5 py-2 text-muted-foreground">{p.manager}</td>
                       <td className="px-5 py-2 text-right tabular-nums">{formatUSD(p.aum)}</td>
                       <td className="px-5 py-2 text-right tabular-nums">{formatPct(p.weight, 2)}</td>
-                      <td
-                        className={cn(
-                          "px-5 py-2 text-right tabular-nums",
-                          p.monthNnb < 0 && "text-negative",
-                        )}
-                      >
-                        {formatUSD(p.monthNnb)}
-                      </td>
-                      <td
-                        className={cn(
-                          "px-5 py-2 text-right tabular-nums",
-                          p.ytdNnb < 0 && "text-negative",
-                        )}
-                      >
-                        {formatUSD(p.ytdNnb)}
-                      </td>
+                      {(() => {
+                        const monthVal = posFlowMetric === "NNB" ? p.monthNnb : p.monthNnbf;
+                        const ytdVal = posFlowMetric === "NNB" ? p.ytdNnb : p.ytdNnbf;
+                        return (
+                          <>
+                            <td className={cn("px-5 py-2 text-right tabular-nums", monthVal < 0 && "text-negative")}>
+                              {formatUSD(monthVal)}
+                            </td>
+                            <td className={cn("px-5 py-2 text-right tabular-nums", ytdVal < 0 && "text-negative")}>
+                              {formatUSD(ytdVal)}
+                            </td>
+                          </>
+                        );
+                      })()}
                     </tr>
                   ))}
                 </Fragment>
