@@ -1045,7 +1045,6 @@ export function getAfpPositions(
       cur.monthNnbf += r.NNBF_Month_USD ?? 0;
     }
     cur.ytdNnb += r.NNB_USD;
-    cur.ytdNnbf = (cur.ytdNnbf ?? 0);
     map.set(r.ISIN, cur);
   }
   // YTD NNBF is a snapshot field; take the value from the current month row.
