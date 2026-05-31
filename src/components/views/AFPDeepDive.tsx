@@ -374,6 +374,14 @@ export function AFPDeepDive() {
           <>
             <SegmentedToggle options={BUCKET_TOGGLE} value={posBucket} onChange={setPosBucket} />
             <SegmentedToggle options={ASSET_CLASS_TOGGLE} value={posAssetClass} onChange={setPosAssetClass} />
+            <SegmentedToggle
+              options={[
+                { value: "NNB" as const, label: "NNB" },
+                { value: "NNBF" as const, label: "NNBF" },
+              ]}
+              value={posFlowMetric}
+              onChange={setPosFlowMetric}
+            />
             <PortfolioPicker value={posPortfolio} onChange={setPosPortfolio} />
             <div className="relative">
               <Search className="h-3 w-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
