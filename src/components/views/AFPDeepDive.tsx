@@ -403,8 +403,8 @@ export function AFPDeepDive() {
                 <th className="px-5 py-2 font-medium">Manager</th>
                 <th className="px-5 py-2 font-medium text-right">AUM Org</th>
                 <th className="px-5 py-2 font-medium text-right">% Portfolio</th>
-                <th className="px-5 py-2 font-medium text-right">Month NNB</th>
-                <th className="px-5 py-2 font-medium text-right">YTD NNB</th>
+                <th className="px-5 py-2 font-medium text-right">Month {posFlowMetric}</th>
+                <th className="px-5 py-2 font-medium text-right">YTD {posFlowMetric}</th>
               </tr>
             </thead>
             <tbody>
@@ -437,22 +437,20 @@ export function AFPDeepDive() {
                       <td className="px-5 py-2 text-muted-foreground">{p.manager}</td>
                       <td className="px-5 py-2 text-right tabular-nums">{formatUSD(p.aum)}</td>
                       <td className="px-5 py-2 text-right tabular-nums">{formatPct(p.weight, 2)}</td>
-                      <td
-                        className={cn(
-                          "px-5 py-2 text-right tabular-nums",
-                          p.monthNnb < 0 && "text-negative",
-                        )}
-                      >
-                        {formatUSD(p.monthNnb)}
-                      </td>
-                      <td
-                        className={cn(
-                          "px-5 py-2 text-right tabular-nums",
-                          p.ytdNnb < 0 && "text-negative",
-                        )}
-                      >
-                        {formatUSD(p.ytdNnb)}
-                      </td>
+                      {(() => {
+                        const monthVal = posFlowMetric === "NNB" ? p.monthNnb : p.monthNnbf;
+                        const ytdVal = posFlowMetric === "NNB" ? p.ytdNnb : p.ytdNnbf;
+                        return (
+                          <>
+                            <td className={cn("px-5 py-2 text-right tabular-nums", monthVal < 0 && "text-negative")}>
+                              {formatUSD(monthVal)}
+                            </td>
+                            <td className={cn("px-5 py-2 text-right tabular-nums", ytdVal < 0 && "text-negative")}>
+                              {formatUSD(ytdVal)}
+                            </td>
+                          </>
+                        );
+                      })()}
                     </tr>
                   ))}
                 </Fragment>
