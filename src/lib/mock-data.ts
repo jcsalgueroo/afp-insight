@@ -1021,6 +1021,8 @@ export function getAfpPositions(
     aum: number;
     monthNnb: number;
     ytdNnb: number;
+    monthNnbf: number;
+    ytdNnbf: number;
   };
   const map = new Map<string, Agg>();
   for (const r of rows) {
@@ -1034,13 +1036,24 @@ export function getAfpPositions(
         aum: 0,
         monthNnb: 0,
         ytdNnb: 0,
+        monthNnbf: 0,
+        ytdNnbf: 0,
       } as Agg);
     if (r.Date === monthDate) {
       cur.aum += r.AUM_USD;
       cur.monthNnb += r.NNB_USD;
+      cur.monthNnbf += r.NNBF_Month_USD ?? 0;
     }
     cur.ytdNnb += r.NNB_USD;
+    cur.ytdNnbf = (cur.ytdNnbf ?? 0);
     map.set(r.ISIN, cur);
+  }
+  // YTD NNBF is a snapshot field; take the value from the current month row.
+  for (const r of rows) {
+    if (r.Date === monthDate) {
+      const cur = map.get(r.ISIN);
+      if (cur) cur.ytdNnbf = r.NNBF_YTD_USD ?? 0;
+    }
   }
   return [...map.values()].map((a) => ({
     ...a,
