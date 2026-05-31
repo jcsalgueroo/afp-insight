@@ -187,6 +187,7 @@ export function AFPDeepDive() {
   const [posAssetClass, setPosAssetClass] = useState<AssetClassFilter>("All");
   const [posPortfolio, setPosPortfolio] = useState<PortfolioType | "All">("All");
   const [posSearch, setPosSearch] = useState("");
+  const [posFlowMetric, setPosFlowMetric] = useState<"NNB" | "NNBF">("NNB");
   const [openPosCat, setOpenPosCat] = useState<Set<Category>>(new Set());
   const toggleSet = (s: Set<string>, key: string, setter: (n: Set<string>) => void) => {
     const n = new Set(s);
