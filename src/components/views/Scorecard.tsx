@@ -42,6 +42,7 @@ import {
   getManagerAfpBreakdown,
   getMonthlyNnbByBucketSeries,
   getOthersManagerBreakdown,
+  getAumSplitByBucket,
   getTopManagersPie,
   getTopManagersShareSeries,
   shadeGreen,
@@ -251,6 +252,9 @@ export function Scorecard() {
   // BLK NNB / NNBF by AFP (stacked by bucket)
   const [blkNnbPeriod, setBlkNnbPeriod] = useState<"Month" | "YTD">("YTD");
   const [blkNnbfPeriod, setBlkNnbfPeriod] = useState<"Month" | "YTD">("YTD");
+
+  // AUM Split donut
+  const [splitAfps, setSplitAfps] = useState<AFP[]>([]);
   const blkNnbByAfp = useMemo(
     () => getBlkFlowsByAfp("NNB", blkNnbPeriod, date),
     [blkNnbPeriod, date],
@@ -283,6 +287,10 @@ export function Scorecard() {
   );
   const etfComp = useMemo(() => getCategoryCompositionSeries(compAfps, "ETF"), [compAfps]);
   const mfComp = useMemo(() => getCategoryCompositionSeries(compAfps, "Mutual Fund"), [compAfps]);
+  const aumSplitData = useMemo(
+    () => getAumSplitByBucket({ date, afps: splitAfps, blkOnly: false }),
+    [date, splitAfps],
+  );
 
   return (
     <div className="p-3 sm:p-6 space-y-6">
@@ -312,6 +320,42 @@ export function Scorecard() {
           trend={bk.blkMfTrend}
         />
       </div>
+
+      {/* AUM Split — donut chart */}
+      <CardShell
+        title="AUM Split"
+        subtitle="Overall market by product type"
+        right={<AfpFilterPopover value={splitAfps} onChange={setSplitAfps} />}
+      >
+        <div className="h-72 max-w-md mx-auto">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(v: number, n: string) => [formatUSD(v), n]}
+              />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Pie
+                data={aumSplitData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={90}
+                paddingAngle={2}
+                isAnimationActive={false}
+                label={({ percent }) => `${((percent ?? 0) * 100).toFixed(0)}%`}
+                labelLine={false}
+              >
+                {aumSplitData.map((d) => (
+                  <Cell key={d.name} fill={BUCKET_COLOR[d.name as Bucket]} stroke="#fff" />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </CardShell>
 
       {/* Category Weights — grouped bar chart */}
       {/* BLK NNB / NNBF by AFP — stacked diverging bars */}

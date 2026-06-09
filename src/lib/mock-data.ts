@@ -579,6 +579,18 @@ export function getOthersManagerBreakdown(f: Filters, bucket: Bucket) {
   return others.map(([Manager, AUM]) => ({ Manager, AUM })).sort((a, b) => b.AUM - a.AUM);
 }
 
+// ---------- AUM Split by bucket (donut) ----------
+
+export function getAumSplitByBucket(f: Filters) {
+  const rows = applyFilters(MASTER_DATA, { ...f, blkOnly: false });
+  const map = new Map<Bucket, number>();
+  for (const r of rows) {
+    const b = bucketOf(r);
+    map.set(b, (map.get(b) ?? 0) + r.AUM_USD);
+  }
+  return BUCKETS.map((b) => ({ name: b, value: map.get(b) ?? 0 }));
+}
+
 // ---------- Monthly NNB by bucket (grouped bar) ----------
 
 export function getMonthlyNnbByBucketSeries(afps: AFP[]) {
