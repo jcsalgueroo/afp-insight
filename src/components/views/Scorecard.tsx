@@ -252,6 +252,9 @@ export function Scorecard() {
   // BLK NNB / NNBF by AFP (stacked by bucket)
   const [blkNnbPeriod, setBlkNnbPeriod] = useState<"Month" | "YTD">("YTD");
   const [blkNnbfPeriod, setBlkNnbfPeriod] = useState<"Month" | "YTD">("YTD");
+
+  // AUM Split donut
+  const [splitAfps, setSplitAfps] = useState<AFP[]>([]);
   const blkNnbByAfp = useMemo(
     () => getBlkFlowsByAfp("NNB", blkNnbPeriod, date),
     [blkNnbPeriod, date],
