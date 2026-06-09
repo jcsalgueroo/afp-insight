@@ -42,6 +42,7 @@ import {
   getManagerAfpBreakdown,
   getMonthlyNnbByBucketSeries,
   getOthersManagerBreakdown,
+  getAumSplitByBucket,
   getTopManagersPie,
   getTopManagersShareSeries,
   shadeGreen,
