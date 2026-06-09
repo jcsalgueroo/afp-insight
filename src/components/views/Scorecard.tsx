@@ -322,100 +322,40 @@ export function Scorecard() {
       </div>
 
       {/* AUM Split — donut chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <CardShell
-          className="lg:col-span-1"
-          title="AUM Split"
-          subtitle="Overall market by product type"
-          right={<AfpFilterPopover value={splitAfps} onChange={setSplitAfps} />}
-        >
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  formatter={(v: number, n: string) => [formatUSD(v), n]}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Pie
-                  data={aumSplitData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={90}
-                  paddingAngle={2}
-                  isAnimationActive={false}
-                  label={({ percent }) => `${((percent ?? 0) * 100).toFixed(0)}%`}
-                  labelLine={false}
-                >
-                  {aumSplitData.map((d) => (
-                    <Cell key={d.name} fill={BUCKET_COLOR[d.name as Bucket]} stroke="#fff" />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </CardShell>
-
-        <CardShell
-          className="lg:col-span-2"
-          title="AUM Org — Evolution by Asset Type"
-          subtitle="Stacked area: ETF / Mutual Fund / Money Market"
-          right={
-            <>
-              <SegmentedToggle options={METRIC_TOGGLE} value={aumMetric} onChange={setAumMetric} />
-              <AfpFilterPopover value={aumLocalAfps} onChange={setAumLocalAfps} />
-            </>
-          }
-        >
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              {aumMetric === "AUM_USD" ? (
-                <AreaChart data={aumSeries} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
-                  <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
-                  <YAxis tickFormatter={(v) => formatUSD(v)} stroke="#999" fontSize={11} width={70} />
-                  <Tooltip
-                    contentStyle={tooltipStyle}
-                    formatter={(v: number, n) => [formatUSD(v), n]}
-                    labelFormatter={(l) => shortMonth(l as string)}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  {BUCKETS.map((b) => (
-                    <Area
-                      key={b}
-                      type="monotone"
-                      dataKey={b}
-                      stackId="1"
-                      stroke={BUCKET_COLOR[b]}
-                      fill={BUCKET_COLOR[b]}
-                      fillOpacity={0.8}
-                      isAnimationActive={false}
-                    />
-                  ))}
-                </AreaChart>
-              ) : (
-                <BarChart data={nnbBarSeries} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
-                  <XAxis dataKey="m" tickFormatter={shortMonth} stroke="#999" fontSize={11} />
-                  <YAxis tickFormatter={(v) => formatUSD(v)} stroke="#999" fontSize={11} width={70} />
-                  <Tooltip
-                    contentStyle={tooltipStyle}
-                    formatter={(v: number, n) => [formatUSD(v), n]}
-                    labelFormatter={(l) => shortMonth(l as string)}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  {BUCKETS.map((b) => (
-                    <Bar key={b} dataKey={b} fill={BUCKET_COLOR[b]} isAnimationActive={false} />
-                  ))}
-                </BarChart>
-              )}
-            </ResponsiveContainer>
-          </div>
-        </CardShell>
-      </div>
+      <CardShell
+        title="AUM Split"
+        subtitle="Overall market by product type"
+        right={<AfpFilterPopover value={splitAfps} onChange={setSplitAfps} />}
+      >
+        <div className="h-72 max-w-md mx-auto">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(v: number, n: string) => [formatUSD(v), n]}
+              />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Pie
+                data={aumSplitData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={90}
+                paddingAngle={2}
+                isAnimationActive={false}
+                label={({ percent }) => `${((percent ?? 0) * 100).toFixed(0)}%`}
+                labelLine={false}
+              >
+                {aumSplitData.map((d) => (
+                  <Cell key={d.name} fill={BUCKET_COLOR[d.name as Bucket]} stroke="#fff" />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </CardShell>
 
       {/* Category Weights — grouped bar chart */}
       {/* BLK NNB / NNBF by AFP — stacked diverging bars */}
