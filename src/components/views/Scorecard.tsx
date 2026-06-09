@@ -287,6 +287,10 @@ export function Scorecard() {
   );
   const etfComp = useMemo(() => getCategoryCompositionSeries(compAfps, "ETF"), [compAfps]);
   const mfComp = useMemo(() => getCategoryCompositionSeries(compAfps, "Mutual Fund"), [compAfps]);
+  const aumSplitData = useMemo(
+    () => getAumSplitByBucket({ date, afps: splitAfps, blkOnly: false }),
+    [date, splitAfps],
+  );
 
   return (
     <div className="p-3 sm:p-6 space-y-6">
