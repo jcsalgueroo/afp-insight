@@ -224,6 +224,10 @@ export function AFPDeepDive() {
         category: cat,
         items: [...items].sort((a, b) => b.aum - a.aum),
         aum: items.reduce((a, b) => a + b.aum, 0),
+        monthNnb: items.reduce((a, b) => a + (b.monthNnb ?? 0), 0),
+        ytdNnb: items.reduce((a, b) => a + (b.ytdNnb ?? 0), 0),
+        monthNnbf: items.reduce((a, b) => a + (b.monthNnbf ?? 0), 0),
+        ytdNnbf: items.reduce((a, b) => a + (b.ytdNnbf ?? 0), 0),
       }))
       .sort((a, b) => b.aum - a.aum);
   }, [positions, posSearch, posAssetClass]);
@@ -416,7 +420,7 @@ export function AFPDeepDive() {
                     className="bg-muted/40 border-t border-border cursor-pointer hover:bg-muted/60"
                     onClick={() => toggleSet(openPosCat, g.category, (n) => setOpenPosCat(n as Set<Category>))}
                   >
-                    <td colSpan={6} className="px-5 py-1.5 text-[11px] uppercase tracking-wider font-semibold text-foreground">
+                    <td colSpan={4} className="px-5 py-1.5 text-[11px] uppercase tracking-wider font-semibold text-foreground">
                       <span className="inline-flex items-center gap-1.5">
                         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                         {g.category}
@@ -425,6 +429,20 @@ export function AFPDeepDive() {
                         </span>
                       </span>
                     </td>
+                    {(() => {
+                      const monthSub = posFlowMetric === "NNB" ? g.monthNnb : g.monthNnbf;
+                      const ytdSub = posFlowMetric === "NNB" ? g.ytdNnb : g.ytdNnbf;
+                      return (
+                        <>
+                          <td className={cn("px-5 py-1.5 text-right tabular-nums text-[11px] font-semibold", monthSub < 0 && "text-negative")}>
+                            {formatUSD(monthSub)}
+                          </td>
+                          <td className={cn("px-5 py-1.5 text-right tabular-nums text-[11px] font-semibold", ytdSub < 0 && "text-negative")}>
+                            {formatUSD(ytdSub)}
+                          </td>
+                        </>
+                      );
+                    })()}
                   </tr>
                   {open && g.items.map((p) => (
                     <tr key={`${g.category}-${p.isin}`} className="border-t border-border hover:bg-muted/50">
