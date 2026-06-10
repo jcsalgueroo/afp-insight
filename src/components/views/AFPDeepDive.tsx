@@ -43,6 +43,12 @@ import { SegmentedToggle } from "@/components/widgets/SegmentedToggle";
 import { cn } from "@/lib/utils";
 
 const BUCKET_TOGGLE = [
+  { value: "ETF" as Bucket, label: "ETF" },
+  { value: "Mutual Fund" as Bucket, label: "MF" },
+  { value: "Money Market" as Bucket, label: "MM" },
+] as const;
+
+const POS_BUCKET_TOGGLE = [
   { value: "All" as BucketFilter, label: "All" },
   { value: "ETF" as Bucket, label: "ETF" },
   { value: "Mutual Fund" as Bucket, label: "MF" },
