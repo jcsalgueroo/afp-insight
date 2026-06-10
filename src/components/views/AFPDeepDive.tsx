@@ -31,6 +31,7 @@ import {
   getNnbByManagerStacked,
   type AFP,
   type Bucket,
+  type BucketFilter,
   type Category,
   type PortfolioType,
 } from "@/lib/mock-data";
@@ -42,6 +43,13 @@ import { SegmentedToggle } from "@/components/widgets/SegmentedToggle";
 import { cn } from "@/lib/utils";
 
 const BUCKET_TOGGLE = [
+  { value: "ETF" as Bucket, label: "ETF" },
+  { value: "Mutual Fund" as Bucket, label: "MF" },
+  { value: "Money Market" as Bucket, label: "MM" },
+] as const;
+
+const POS_BUCKET_TOGGLE = [
+  { value: "All" as BucketFilter, label: "All" },
   { value: "ETF" as Bucket, label: "ETF" },
   { value: "Mutual Fund" as Bucket, label: "MF" },
   { value: "Money Market" as Bucket, label: "MM" },
@@ -183,7 +191,7 @@ export function AFPDeepDive() {
   }, [nnbStacked]);
 
   // Positions table
-  const [posBucket, setPosBucket] = useState<Bucket>("ETF");
+  const [posBucket, setPosBucket] = useState<BucketFilter>("ETF");
   const [posAssetClass, setPosAssetClass] = useState<AssetClassFilter>("All");
   const [posPortfolio, setPosPortfolio] = useState<PortfolioType | "All">("All");
   const [posSearch, setPosSearch] = useState("");
@@ -376,7 +384,7 @@ export function AFPDeepDive() {
         subtitle={`Holdings for ${primaryAfp}, grouped by category`}
         right={
           <>
-            <SegmentedToggle options={BUCKET_TOGGLE} value={posBucket} onChange={setPosBucket} />
+            <SegmentedToggle options={POS_BUCKET_TOGGLE} value={posBucket} onChange={setPosBucket} />
             <SegmentedToggle options={ASSET_CLASS_TOGGLE} value={posAssetClass} onChange={setPosAssetClass} />
             <SegmentedToggle
               options={[
