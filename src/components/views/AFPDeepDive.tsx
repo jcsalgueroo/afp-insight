@@ -31,6 +31,7 @@ import {
   getNnbByManagerStacked,
   type AFP,
   type Bucket,
+  type BucketFilter,
   type Category,
   type PortfolioType,
 } from "@/lib/mock-data";
