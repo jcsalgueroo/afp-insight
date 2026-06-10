@@ -384,7 +384,7 @@ export function AFPDeepDive() {
         subtitle={`Holdings for ${primaryAfp}, grouped by category`}
         right={
           <>
-            <SegmentedToggle options={BUCKET_TOGGLE} value={posBucket} onChange={setPosBucket} />
+            <SegmentedToggle options={POS_BUCKET_TOGGLE} value={posBucket} onChange={setPosBucket} />
             <SegmentedToggle options={ASSET_CLASS_TOGGLE} value={posAssetClass} onChange={setPosAssetClass} />
             <SegmentedToggle
               options={[
