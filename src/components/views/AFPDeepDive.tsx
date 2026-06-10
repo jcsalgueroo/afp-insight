@@ -191,7 +191,7 @@ export function AFPDeepDive() {
   }, [nnbStacked]);
 
   // Positions table
-  const [posBucket, setPosBucket] = useState<Bucket>("ETF");
+  const [posBucket, setPosBucket] = useState<BucketFilter>("ETF");
   const [posAssetClass, setPosAssetClass] = useState<AssetClassFilter>("All");
   const [posPortfolio, setPosPortfolio] = useState<PortfolioType | "All">("All");
   const [posSearch, setPosSearch] = useState("");
