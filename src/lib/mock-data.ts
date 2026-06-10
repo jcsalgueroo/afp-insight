@@ -1009,7 +1009,7 @@ export function getCategoryCompositionSeries(afps: AFP[], bucket: Bucket) {
 export function getAfpPositions(
   afps: AFP[],
   portfolio: PortfolioType | "All",
-  bucket: Bucket,
+  bucket: BucketFilter,
   monthDate: string,
 ) {
   const ytd = monthsYTD(monthDate);
@@ -1018,7 +1018,7 @@ export function getAfpPositions(
       ytd.includes(r.Date) &&
       (afps.length === 0 || afps.includes(r.AFP)) &&
       (portfolio === "All" || r.Portfolio_Type === portfolio) &&
-      bucketOf(r) === bucket,
+      (bucket === "All" || bucketOf(r) === bucket),
   );
 
   // Total AUM (current month only, same scope) for weight denominator
